@@ -139,6 +139,8 @@ export function useDescribeGame() {
     const onState = (s: DGState) => {
       setState(s);
       if (s.reveal?.subPhase === 'showing') setLiveGuesses(s.reveal.guesses || {});
+      // If we missed the dg:finished event (e.g. during a reconnect), synthesise it
+      if (s.status === 'finished') setFinished(prev => prev ?? { standings: s.groups, winner: s.groups[0] ?? null });
     };
     const onStarted = (d: { scribes: Record<string, string> }) => { setScribes(d.scribes || {}); setFinished(null); };
     const onDescription = () => { setLiveGuesses({}); setRebuttalEnded(false); };
