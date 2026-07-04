@@ -16,7 +16,7 @@ const WorldCanvas = dynamic(() => import('./WorldCanvas').then((m) => m.WorldCan
  * every tier (not hidden behind the 3D world). The camera page is a standalone
  * capture device.
  */
-const TWO_D_ROUTES = ['/camera', '/game/describe'];
+const TWO_D_ROUTES = ['/camera', '/game/describe', '/game/debate'];
 
 /**
  * Routes that keep the live 3D world as their background and float their DOM
