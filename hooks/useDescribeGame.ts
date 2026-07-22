@@ -53,7 +53,6 @@ export interface DGState {
 }
 export interface DGCamera {
   connected: boolean;
-  jpeg: string | null;
 }
 
 export function useDescribeGame() {
@@ -179,9 +178,7 @@ export function useDescribeGame() {
     const onRebuttalTimeUp = () => setRebuttalEnded(true);
     const onFinished = (d: { standings: DGGroup[]; winner: DGGroup | null }) => setFinished(d);
     const onCamStatus = (d: { groupId: string; connected: boolean }) =>
-      setCameras(c => ({ ...c, [d.groupId]: { connected: d.connected, jpeg: d.connected ? (c[d.groupId]?.jpeg ?? null) : null } }));
-    const onCamFrame = (d: { groupId: string; jpeg: string }) =>
-      setCameras(c => ({ ...c, [d.groupId]: { connected: true, jpeg: d.jpeg } }));
+      setCameras(c => ({ ...c, [d.groupId]: { connected: d.connected } }));
 
     socket.on('dg:players', onPlayers);
     socket.on('dg:state', onState);
@@ -193,7 +190,6 @@ export function useDescribeGame() {
     socket.on('dg:rebuttalTimeUp', onRebuttalTimeUp);
     socket.on('dg:finished', onFinished);
     socket.on('dg:cameraStatus', onCamStatus);
-    socket.on('dg:cameraFrame', onCamFrame);
     return () => {
       socket.off('dg:players', onPlayers);
       socket.off('dg:state', onState);
@@ -205,7 +201,6 @@ export function useDescribeGame() {
       socket.off('dg:rebuttalTimeUp', onRebuttalTimeUp);
       socket.off('dg:finished', onFinished);
       socket.off('dg:cameraStatus', onCamStatus);
-      socket.off('dg:cameraFrame', onCamFrame);
     };
   }, [socket]);
 

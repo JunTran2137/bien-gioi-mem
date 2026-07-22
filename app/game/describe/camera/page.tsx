@@ -13,25 +13,32 @@ import { cardByMarker } from '@/data/describeCards';
  */
 
 const DETECT_WIDTH = 256;   // small canvas for ArUco detection only
-const STREAM_WIDTH = 480;   // full-quality canvas for JPEG streaming
-const FRAME_QUALITY = 0.5;  // restored quality
-const TARGET_FPS = 5;
+const STREAM_WIDTH = 240;   // stream canvas — 240px is enough for thumbnails, ~4× smaller data than 480px
+const FRAME_QUALITY = 0.55; // slightly higher quality at lower res for readable card text
+const TARGET_FPS = 4;       // 4fps is smooth enough for still-ish card display
 
 function CameraInner() {
   const params = useSearchParams();
   const roomCode = (params.get('room') || '').toUpperCase().trim();
-  const { data: session, status: sessionStatus } = useSession();
+  const { status: sessionStatus } = useSession(); // session data not needed, only auth status
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);   // detect canvas
   const frameCanvasRef = useRef<HTMLCanvasElement | null>(null); // stream canvas
+  const detectCtxRef = useRef<CanvasRenderingContext2D | null>(null); // cached detect ctx
+  const frameCtxRef = useRef<CanvasRenderingContext2D | null>(null);  // cached stream ctx
   const detectorRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  const rvfcRef = useRef<number | null>(null); // requestVideoFrameCallback handle
   const runningRef = useRef(false);
   const lastTickRef = useRef(0);
   const encodingRef = useRef(false); // skip frame if previous toBlob not done
   const groupRef = useRef<string>('');
+  const lastTilesKeyRef = useRef<string>(''); // dedupe tile emits
+  const lastDetectedRef = useRef<string | null>(null); // dedupe setState
+  const socketRef = useRef<ReturnType<typeof getSocket> | null>(null); // cached socket
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null); // prevent screen sleep
 
   const [groupId, setGroupId] = useState<string>('');
   const [groupName, setGroupName] = useState<string>('');
@@ -80,33 +87,52 @@ function CameraInner() {
     // ── Detection on small canvas (fast) ──────────────────────────────
     const dw = DETECT_WIDTH;
     const dh = Math.round((vh / vw) * dw);
-    if (canvas.width !== dw || canvas.height !== dh) { canvas.width = dw; canvas.height = dh; }
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (canvas.width !== dw || canvas.height !== dh) {
+      canvas.width = dw; canvas.height = dh;
+      detectCtxRef.current = null; // reset cached ctx on resize
+    }
+    // Cache the 2D context — getContext() every tick is wasteful
+    if (!detectCtxRef.current) {
+      detectCtxRef.current = canvas.getContext('2d', { willReadFrequently: true });
+    }
+    const ctx = detectCtxRef.current;
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, dw, dh);
 
-    let tiles: { id: number; center: { x: number; y: number } }[] = [];
+    let tiles: { id: number }[] = [];
     try {
       const imageData = ctx.getImageData(0, 0, dw, dh);
       const markers = detector.detect(imageData) || [];
-      tiles = markers.map((m: any) => {
-        const cx = (m.corners[0].x + m.corners[1].x + m.corners[2].x + m.corners[3].x) / 4;
-        const cy = (m.corners[0].y + m.corners[1].y + m.corners[2].y + m.corners[3].y) / 4;
-        return { id: m.id, center: { x: cx / dw, y: cy / dh } };
-      });
+      // Only send marker IDs — center coordinates are computed but never used by server
+      tiles = markers.map((m: any) => ({ id: m.id }));
     } catch { /* skip bad frame */ }
 
     const card = tiles.length ? cardByMarker(tiles[0].id) : null;
-    setDetected(card ? card.name : null);
+    // Only update React state when detected card changes (avoid re-render every tick)
+    const detectedName = card ? card.name : null;
+    if (detectedName !== lastDetectedRef.current) {
+      lastDetectedRef.current = detectedName;
+      setDetected(detectedName);
+    }
 
-    const socket = getSocket();
+    // Use cached socket reference (avoid getSocket() call per tick)
+    const socket = socketRef.current;
     const gid = groupRef.current;
-    if (!gid) return;
+    if (!socket || !gid) return;
 
-    socket.emit('dgcam:tiles', { roomCode, groupId: gid, tiles });
+    // Only emit tiles when they actually changed (dedupe to save socket traffic)
+    const tilesKey = tiles.map(t => t.id).join(',');
+    if (tilesKey !== lastTilesKeyRef.current) {
+      lastTilesKeyRef.current = tilesKey;
+      socket.emit('dgcam:tiles', { roomCode, groupId: gid, tiles });
+    }
 
     // ── Stream on full-quality canvas (async toBlob, skip if busy) ────
-    if (!encodingRef.current) {
+    // Also enforce TARGET_FPS via wall-clock time
+    const now = Date.now();
+    const minInterval = 1000 / TARGET_FPS;
+    if (!encodingRef.current && now - lastTickRef.current >= minInterval) {
+      lastTickRef.current = now;
       encodingRef.current = true;
       // Create/reuse a separate canvas for streaming
       if (!frameCanvasRef.current) {
@@ -115,20 +141,21 @@ function CameraInner() {
       const fc = frameCanvasRef.current;
       const fw = STREAM_WIDTH;
       const fh = Math.round((vh / vw) * fw);
-      if (fc.width !== fw || fc.height !== fh) { fc.width = fw; fc.height = fh; }
-      const fctx = fc.getContext('2d');
+      if (fc.width !== fw || fc.height !== fh) {
+        fc.width = fw; fc.height = fh;
+        frameCtxRef.current = null; // reset cached ctx on resize
+      }
+      // Cache the stream canvas context
+      if (!frameCtxRef.current) frameCtxRef.current = fc.getContext('2d');
+      const fctx = frameCtxRef.current;
       if (fctx) {
         fctx.drawImage(video, 0, 0, fw, fh);
         fc.toBlob((blob) => {
           encodingRef.current = false;
           if (!blob || !runningRef.current) return;
-          // Send as binary ArrayBuffer — 33% smaller than base64, no encoding overhead
-          blob.arrayBuffer().then(buf => {
-            if (runningRef.current && gid) {
-              // compress(false): skip deflate on already-compressed JPEG binary
-              socket.compress(false).emit('dgcam:frame', { roomCode, groupId: gid, jpeg: buf });
-            }
-          });
+          // Send Blob directly — Socket.io v4 handles Blob as binary attachment,
+          // receiver gets ArrayBuffer. Skips the extra blob.arrayBuffer() async hop.
+          socket.compress(false).emit('dgcam:frame', { roomCode, groupId: gid, jpeg: blob });
         }, 'image/jpeg', FRAME_QUALITY);
       } else {
         encodingRef.current = false;
@@ -154,7 +181,10 @@ function CameraInner() {
         detectorRef.current = new AR.Detector({ dictionaryName: 'ARUCO' });
       }
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        // 640×480 ideal: drawImage from 1280p costs 4× more CPU than 640p
+        // with zero quality benefit — ArUco quality depends on marker size
+        // in the 256px detection canvas, not the source resolution.
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 640, max: 1280 }, height: { ideal: 480, max: 720 } },
         audio: false
       });
       streamRef.current = stream;
@@ -163,7 +193,32 @@ function CameraInner() {
       await video.play();
       runningRef.current = true;
       setStatus('live');
-      rafRef.current = setInterval(loop, Math.round(1000 / TARGET_FPS)) as any;
+      // Acquire wake lock to prevent screen from sleeping mid-game
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        } catch { /* permission denied or unsupported, non-fatal */ }
+      }
+      // Cache socket once (avoids getSocket() call in every loop tick)
+      socketRef.current = getSocket();
+      // Prefer requestVideoFrameCallback (fires when GPU has new decoded frame)
+      // IMPORTANT: gate all work behind minInterval — RVFC fires at video FPS (30fps),
+      // we only want to do detection + stream at TARGET_FPS (4fps). Without the gate
+      // ArUco would run 30fps which wastes CPU on mobile.
+      const minInterval = 1000 / TARGET_FPS;
+      const vid = videoRef.current!;
+      const useRvfc = typeof (vid as any).requestVideoFrameCallback === 'function';
+      if (useRvfc) {
+        const scheduleRvfc = () => {
+          if (!runningRef.current) return;
+          // Only do actual work when enough time has elapsed
+          if (Date.now() - lastTickRef.current >= minInterval) loop();
+          rvfcRef.current = (vid as any).requestVideoFrameCallback(scheduleRvfc);
+        };
+        rvfcRef.current = (vid as any).requestVideoFrameCallback(scheduleRvfc);
+      } else {
+        rafRef.current = setInterval(loop, Math.round(minInterval)) as any;
+      }
     } catch (e: any) {
       setStatus('error');
       setErrorMsg(e?.name === 'NotAllowedError' ? 'Bạn đã từ chối quyền camera.' : 'Không mở được camera: ' + (e?.message || 'lỗi'));
@@ -174,6 +229,15 @@ function CameraInner() {
     runningRef.current = false;
     if (rafRef.current) clearInterval(rafRef.current);
     rafRef.current = null;
+    const vid = videoRef.current;
+    if (rvfcRef.current !== null && vid && typeof (vid as any).cancelVideoFrameCallback === 'function') {
+      (vid as any).cancelVideoFrameCallback(rvfcRef.current);
+    }
+    rvfcRef.current = null;
+    socketRef.current = null;
+    // Release wake lock
+    wakeLockRef.current?.release().catch(() => {});
+    wakeLockRef.current = null;
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
     setStatus('idle');
@@ -181,23 +245,6 @@ function CameraInner() {
   }, []);
 
   useEffect(() => () => stop(), [stop]);
-
-  // Hard block: another device from same group is already connected
-  if (alreadyConnected) {
-    return (
-      <div className="min-h-screen bg-bg flex items-center justify-center px-4">
-        <div className="w-full max-w-sm bg-surface rounded-2xl border border-danger/40 p-8 text-center space-y-4">
-          <div className="text-4xl">🚫</div>
-          <h2 className="font-display text-xl text-danger">Nhóm đã có camera</h2>
-          <p className="text-muted text-sm">
-            Một thiết bị khác trong nhóm <b className="text-text">{groupName}</b> đã kết nối camera rồi.
-            Mỗi nhóm chỉ được dùng 1 camera.
-          </p>
-          <p className="text-xs text-muted">Đóng trang này — để người khác trong nhóm giữ điện thoại.</p>
-        </div>
-      </div>
-    );
-  }
 
   // Hard block: another device from same group is already connected
   if (alreadyConnected) {

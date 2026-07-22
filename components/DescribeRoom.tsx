@@ -157,6 +157,9 @@ function RoleGate({ creating, onHost }: { creating: boolean; onHost: () => void 
 
 /* --------------------------------- Lobby ---------------------------------- */
 function Lobby({ g, groups }: { g: any; groups: any[] }) {
+  const cameraUrl = (typeof window !== 'undefined' ? window.location.origin : '') +
+    `/game/describe/camera?room=${g.roomCode}`;
+
   const byGroup = useMemo(() => {
     const m: Record<string, any[]> = {};
     (g.players as any[]).forEach(p => { const k = p.groupId || '__no_group__'; (m[k] = m[k] || []).push(p); });
@@ -199,7 +202,9 @@ function Lobby({ g, groups }: { g: any; groups: any[] }) {
       {myGroupMissingCam && (
         <div className="rounded-xl border border-accent/50 bg-accent/10 p-4 text-sm space-y-1">
           <p className="font-semibold text-accent flex items-center gap-1"><Camera size={15} /> Nhóm bạn chưa kết nối camera!</p>
-          <p className="text-muted">Mở <span className="font-mono font-medium text-text">/game/describe/camera?room={g.roomCode}</span> trên điện thoại và đăng nhập để kết nối.</p>
+          <p className="text-muted">Mở link sau trên điện thoại và đăng nhập để kết nối:</p>
+          <a href={cameraUrl} target="_blank" rel="noopener noreferrer"
+            className="font-mono font-medium text-primary underline break-all">{cameraUrl}</a>
         </div>
       )}
 
@@ -220,7 +225,9 @@ function Lobby({ g, groups }: { g: any; groups: any[] }) {
       {(!g.isHostMe && !g.isHost) && (
         <div className="rounded-xl bg-primary-soft p-4 text-sm text-text space-y-2">
           <p className="font-semibold flex items-center gap-1"><Camera size={15} /> Chuẩn bị camera</p>
-          <p className="text-muted">Mỗi nhóm mở 1 điện thoại tại <span className="font-mono">/game/describe/camera?room={g.roomCode}</span> và chọn nhóm mình để giơ thẻ khi đoán.</p>
+          <p className="text-muted">Mỗi nhóm mở link sau trên 1 điện thoại và chọn nhóm mình để giơ thẻ khi đoán:</p>
+          <a href={cameraUrl} target="_blank" rel="noopener noreferrer"
+            className="font-mono text-primary underline break-all">{cameraUrl}</a>
         </div>
       )}
 
@@ -362,27 +369,61 @@ function CameraGrid({ g, groups }: { g: any; groups: any[] }) {
   const guesses = r?.subPhase === 'showing' ? g.liveGuesses : (r?.guesses || {});
   // Decode JPEG off main thread via createImageBitmap, draw to <canvas>
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
+  // Cache bitmaprenderer contexts (zero-copy transferFromImageBitmap)
+  // Use explicit false sentinel to distinguish "queried+unsupported" from "not yet queried"
+  const bmpCtxRefs = useRef<Record<string, ImageBitmapRenderingContext | false | null>>({});
+  // Per-group decode guard: skip incoming frame if previous createImageBitmap still pending
+  const decodingRef = useRef<Record<string, boolean>>({});
   useEffect(() => {
     const socket = getSocket();
     const onFrame = (d: { groupId: string; jpeg: ArrayBuffer | string }) => {
       if (!(d.jpeg instanceof ArrayBuffer)) return;
+      // Drop frame if still decoding previous one for this group (prevent queue buildup)
+      if (decodingRef.current[d.groupId]) return;
       const canvas = canvasRefs.current[d.groupId];
       if (!canvas) return;
       const blob = new Blob([d.jpeg], { type: 'image/jpeg' });
       if (typeof createImageBitmap !== 'undefined') {
-        createImageBitmap(blob).then(bmp => {
+        decodingRef.current[d.groupId] = true;
+        // colorSpaceConversion:'none' skips sRGB→display conversion (not needed for thumbnails)
+        // premultiplyAlpha:'none' skips alpha processing (JPEG has no alpha)
+        createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }).then(bmp => {
+          decodingRef.current[d.groupId] = false;
           const cv = canvasRefs.current[d.groupId];
           if (!cv) { bmp.close(); return; }
-          if (cv.width !== bmp.width || cv.height !== bmp.height) {
-            cv.width = bmp.width; cv.height = bmp.height;
+          // Use bitmaprenderer for zero-copy transfer (faster than drawImage)
+          // bmpCtxRefs stores: null = not queried, false = queried+unsupported, context = supported
+          let bmpCtx = bmpCtxRefs.current[d.groupId];
+          if (bmpCtx === null || bmpCtx === undefined) {
+            const ctx = cv.getContext('bitmaprenderer') as ImageBitmapRenderingContext | null;
+            bmpCtx = ctx ?? false; // false = unsupported, avoid repeated getContext calls
+            bmpCtxRefs.current[d.groupId] = bmpCtx;
           }
-          cv.getContext('2d')?.drawImage(bmp, 0, 0);
-          bmp.close();
-        }).catch(() => {});
+          if (bmpCtx) {
+            bmpCtx.transferFromImageBitmap(bmp); // zero-copy, bmp is consumed
+          } else {
+            // Fallback to 2d drawImage
+            if (cv.width !== bmp.width || cv.height !== bmp.height) {
+              cv.width = bmp.width; cv.height = bmp.height;
+            }
+            cv.getContext('2d')?.drawImage(bmp, 0, 0);
+            bmp.close();
+          }
+        }).catch(() => { decodingRef.current[d.groupId] = false; });
       } else {
-        // Fallback: object URL on img element
+        // Fallback: draw via Image — revoke previous URL to prevent memory leak
+        const prev = (canvas as any).__objUrl as string | undefined;
+        if (prev) URL.revokeObjectURL(prev);
         const url = URL.createObjectURL(blob);
-        const img = canvas as unknown as HTMLImageElement;
+        (canvas as any).__objUrl = url;
+        const img = new Image();
+        img.onload = () => {
+          const cv = canvasRefs.current[d.groupId];
+          if (!cv) return;
+          if (cv.width !== img.naturalWidth) cv.width = img.naturalWidth;
+          if (cv.height !== img.naturalHeight) cv.height = img.naturalHeight;
+          cv.getContext('2d')?.drawImage(img, 0, 0);
+        };
         img.src = url;
       }
     };
