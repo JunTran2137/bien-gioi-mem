@@ -3,7 +3,6 @@
 import { Canvas } from '@react-three/fiber';
 import { Suspense, useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { AdaptiveDpr, AdaptiveEvents } from '@react-three/drei';
 import { usePerf } from '@/lib/three/perfContext';
 import { WorldRouter } from './WorldRouter';
 import { CityProps } from './CityProps';
@@ -65,9 +64,6 @@ export function WorldCanvas() {
           />
 
           <CameraRig disabled={authOpen} />
-
-          <AdaptiveDpr pixelated />
-          <AdaptiveEvents />
         </Suspense>
       </Canvas>
 

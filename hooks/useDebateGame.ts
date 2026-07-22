@@ -67,13 +67,28 @@ export function useDebateGame() {
   const [myVote, setMyVote] = useState<string | null>(null);
   const [lastMatchResult, setLastMatchResult] = useState<any>(null);
   const [finished, setFinished] = useState<any>(null);
+  const [turnEnded, setTurnEnded] = useState(false);
   const joinedRef = useRef(false);
 
-  const isHostMe = uid != null && uid === hostUid;
+  // While waiting for server ack, trust URL param as fallback
+  const isHostMe = uid != null && (hostUid !== null ? uid === hostUid : isHost);
   const phase = state?.phase || 'LOBBY';
   const match = state?.match || null;
   const amIDebating = match ? (match.team1 === myGroupId || match.team2 === myGroupId) : false;
   const amIActive = match?.activeGroupId === myGroupId;
+
+  /* ---- reset state on room change ---- */
+  useEffect(() => {
+    if (!roomCode) return;
+    joinedRef.current = false;
+    setPlayers([]);
+    setHostUid(null);
+    setState(null);
+    setTimeLeft(0);
+    setMyVote(null);
+    setLastMatchResult(null);
+    setFinished(null);
+  }, [roomCode]);
 
   /* ---- auth ---- */
   useEffect(() => {
@@ -83,7 +98,21 @@ export function useDebateGame() {
 
   /* ---- join ---- */
   useEffect(() => {
-    if (!socket || !connected || !uid || !user || !roomCode || joinedRef.current) return;
+    if (!socket || !connected || !uid || !user || !roomCode) return;
+    if (isHost) {
+      // Host only creates room (no debate:join — not a player)
+      socket.emit('debate:create', { hostUid: uid, roomCode }, (res: any) => {
+        if (!res?.ok) return;
+        if (uid && res.hostUid && res.hostUid !== uid) {
+          router.replace(`/game/debate?room=${roomCode}`);
+          return;
+        }
+        setHostUid(res.hostUid);
+        if (res.players) setPlayers(res.players);
+      });
+      return;
+    }
+    if (joinedRef.current) return;
     let attempt = 0;
     const doJoin = () => {
       socket.emit('debate:join', {
@@ -94,7 +123,6 @@ export function useDebateGame() {
       }, (res: any) => {
         if (!res?.ok) {
           attempt++;
-          if (isHost) { socket.emit('debate:create', { hostUid: uid, roomCode }, () => setTimeout(doJoin, 400)); return; }
           if (attempt < 6) { setTimeout(doJoin, 1200); return; }
           toast({ title: 'Không vào được phòng', variant: 'danger' });
           router.replace('/game');
@@ -104,8 +132,7 @@ export function useDebateGame() {
         setHostUid(res.hostUid);
       });
     };
-    if (isHost) socket.emit('debate:create', { hostUid: uid, roomCode }, () => doJoin());
-    else doJoin();
+    doJoin();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, connected, uid, user?.groupId, roomCode]);
 
@@ -128,6 +155,7 @@ export function useDebateGame() {
     });
     const onMatchResult = (d: any) => setLastMatchResult(d);
     const onFinished = (d: any) => setFinished(d);
+    const onTurnTimeUp = () => setTurnEnded(true);
     const onError = (e: { message: string }) => toast({ title: 'Lỗi', description: e.message, variant: 'danger' });
 
     socket.on('debate:players', onPlayers);
@@ -137,6 +165,7 @@ export function useDebateGame() {
     socket.on('debate:voteUpdate', onVoteUpdate);
     socket.on('debate:matchResult', onMatchResult);
     socket.on('debate:finished', onFinished);
+    socket.on('debate:turnTimeUp', onTurnTimeUp);
     socket.on('debate:error', onError);
     return () => {
       socket.off('debate:players', onPlayers);
@@ -146,13 +175,21 @@ export function useDebateGame() {
       socket.off('debate:voteUpdate', onVoteUpdate);
       socket.off('debate:matchResult', onMatchResult);
       socket.off('debate:finished', onFinished);
+      socket.off('debate:turnTimeUp', onTurnTimeUp);
       socket.off('debate:error', onError);
     };
   }, [socket]);
 
   /* ---- countdown ---- */
   useEffect(() => {
-    if (!state?.deadline) return;
+    setTurnEnded(false); // reset when turn changes
+  }, [state?.match?.turnIdx]);
+
+  useEffect(() => {
+    if (!state?.deadline) {
+      setTimeLeft(0); // reset when deadline is cleared
+      return;
+    }
     const tick = () => setTimeLeft(Math.max(0, Math.round((state.deadline - Date.now()) / 1000)));
     tick();
     const id = setInterval(tick, 250);
@@ -160,6 +197,12 @@ export function useDebateGame() {
   }, [state?.deadline, state?.phase]);
 
   const startGame = useCallback(() => { socket?.emit('debate:start', { roomCode, uid }); }, [socket, roomCode, uid]);
+  const setFirstSpeaker = useCallback((teamGroupId: string) => { socket?.emit('debate:setFirstSpeaker', { roomCode, uid, teamGroupId }); }, [socket, roomCode, uid]);
+  const nextTurn = useCallback(() => { socket?.emit('debate:nextTurn', { roomCode, uid }); }, [socket, roomCode, uid]);
+  const forceNextMatch = useCallback(() => { socket?.emit('debate:forceNext', { roomCode, uid }); }, [socket, roomCode, uid]);
+  const resolveVoting = useCallback(() => { socket?.emit('debate:resolve', { roomCode, uid }); }, [socket, roomCode, uid]);
+  const startVoting = useCallback(() => { socket?.emit('debate:startVoting', { roomCode, uid }); }, [socket, roomCode, uid]);
+  const nextMatch = useCallback(() => { socket?.emit('debate:nextMatch', { roomCode, uid }); }, [socket, roomCode, uid]);
   const sendArg = useCallback((text: string) => {
     if (!text.trim()) return;
     socket?.emit('debate:argument', { roomCode, uid, text: text.trim() });
@@ -172,10 +215,11 @@ export function useDebateGame() {
   }, [socket, roomCode, uid, amIDebating]);
 
   return {
-    roomCode, uid, isHostMe, user, connected,
+    roomCode, uid, isHostMe, isHost, user, connected,
     players, hostUid, state, phase, match,
     myGroupId, amIDebating, amIActive, timeLeft, myVote,
     lastMatchResult, finished,
-    startGame, sendArg, react, vote,
+    startGame, setFirstSpeaker, nextTurn, forceNextMatch, resolveVoting, startVoting, nextMatch, sendArg, react, vote,
+    turnEnded,
   };
 }

@@ -82,11 +82,17 @@ function Car({ cfg, segments, simple }: { cfg: CarConfig; segments: Segment[]; s
   const dirRef = useRef<number>(cfg.laneOffset > 0 ? 1 : -1);
   const vel = 2 * span * cfg.speed; // world units / sec (≈ the old ping-pong rate)
   const STOP_GAP = 3.0;
+  const acc = useRef(0);
 
   useFrame(({ clock }, delta) => {
+    // Throttle to 30 fps — slow-moving cars are indistinguishable at 30fps,
+    // halves per-car useFrame cost on every tier.
+    acc.current += delta;
+    if (acc.current < 1 / 30) return;
+    const dt = Math.min(acc.current, 0.06);
+    acc.current = 0;
     if (!ref.current) return;
     const t = clock.elapsedTime;
-    const dt = Math.min(delta, 0.05);
 
     const c = cRef.current;
     let dir = dirRef.current;

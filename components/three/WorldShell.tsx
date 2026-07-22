@@ -16,13 +16,13 @@ const WorldCanvas = dynamic(() => import('./WorldCanvas').then((m) => m.WorldCan
  * every tier (not hidden behind the 3D world). The camera page is a standalone
  * capture device.
  */
-const TWO_D_ROUTES = ['/camera', '/game/describe', '/game/debate', '/dev-login'];
+const TWO_D_ROUTES = ['/camera', '/game/describe/camera', '/dev-login'];
 
 /**
  * Routes that keep the live 3D world as their background and float their DOM
  * page on top as a popup overlay (e.g. the Quiz board game over the arena).
  */
-const OVERLAY_ROUTES: string[] = [];
+const OVERLAY_ROUTES: string[] = ['/game/describe', '/game/debate'];
 
 function Loader() {
   return (
@@ -70,7 +70,7 @@ function Inner({ children }: { children: React.ReactNode }) {
 
   const isOverlay =
     OVERLAY_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/')) ||
-    (pathname === '/game' && searchParams.get('play') === 'quiz');
+    (pathname === '/game' && (searchParams.get('play') === 'describe' || searchParams.get('play') === 'quiz' || searchParams.get('play') === 'debate'));
   // Full-screen 2D routes (board game + camera) — always visible on every tier.
   if (TWO_D_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'))) {
     return <div className="relative z-10 min-h-screen bg-bg">{children}</div>;

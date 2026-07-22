@@ -67,9 +67,9 @@ function computeTier(): PerfState {
 
   let tier: PerfTier = 'high';
   if (!webgl) tier = 'fallback';
-  else if (isMobile) tier = 'fallback';
   else if (cores < 4 || mem < 4) tier = 'low';
-  else if (cores < 8 || mem < 8) tier = 'mid';
+  else if (isMobile || cores < 8 || mem < 8) tier = 'mid';
+  // Mobile gets 'mid' instead of 'fallback' — city always renders fully.
 
   const dpr: [number, number] =
     tier === 'high' ? [1, 1] : tier === 'mid' ? [0.85, 1] : [0.7, 0.9];

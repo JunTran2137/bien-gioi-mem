@@ -127,7 +127,7 @@ export function GroupSelector({ open, currentGroupId, onConfirmed, onClose }: Pr
                   Chưa có nhóm nào. Hãy là người đầu tiên tạo nhóm bên dưới!
                 </div>
               )}
-              {groups.map(g => {
+              {[...groups].sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true })).map(g => {
                 const isSelected = selectedId === g.id;
                 const disabled = g.full && g.id !== currentGroupId;
                 return (

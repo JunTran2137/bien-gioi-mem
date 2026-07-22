@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { DescribeRoom } from '@/components/DescribeRoom';
 
-export const metadata = { title: 'Mô Tả & Đoán Thẻ' };
+export const metadata = { title: 'Luận Giải' };
 
 export default function DescribeGamePage() {
   return (

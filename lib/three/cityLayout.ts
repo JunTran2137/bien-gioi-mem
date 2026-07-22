@@ -33,7 +33,7 @@ export const GRID_EXTENT = ((N_CELLS - 1) / 2) * CYCLE + CELL_SIZE / 2; // 58.5
  * changes. The /api/city/layout endpoint sends `Cache-Control: immutable` so
  * old responses live in the browser for a year. Appending ?v=N to the fetch
  * URL forces a fresh download because the cache is keyed on full URL. */
-export const LAYOUT_VERSION = 28;
+export const LAYOUT_VERSION = 42;
 
 const FACADE_COLORS = [
   hex.pastelPink, hex.pastelMint, hex.pastelSky, hex.pastelPeach,
@@ -97,7 +97,7 @@ const LAMP_COUNT_BY_TIER: Record<Tier, number> = { high: 0, mid: 0, low: 0, fall
 
 /* Fraction of plots that actually get a building (the rest become lawns). Lower
  * tiers thin the city out to cut draw calls; high stays near-full. */
-const BUILDING_DENSITY_BY_TIER: Record<Tier, number> = { high: 1.0, mid: 0.58, low: 0.4, fallback: 0.3 };
+const BUILDING_DENSITY_BY_TIER: Record<Tier, number> = { high: 1.0, mid: 1.0, low: 1.0, fallback: 0.3 };
 
 /* === Reserved landmark + plaza footprints === */
 /* Reserve circles cover each landmark's single 15×15 cell. Landmarks now sit
@@ -115,10 +115,11 @@ export const ROUNDABOUT_OUTER = 7.8;
 export function getReserves(): Reserve[] {
   return [
     [0, 0, PLAZA_RADIUS],
-    [B.library.position[0], B.library.position[2], LANDMARK_RADIUS],
-    [B.tower.position[0], B.tower.position[2], LANDMARK_RADIUS],
-    [B.arena.position[0], B.arena.position[2], LANDMARK_RADIUS],
-    [B.academy.position[0], B.academy.position[2], LANDMARK_RADIUS],
+    [B.library.position[0],  B.library.position[2],  LANDMARK_RADIUS],
+    [B.tower.position[0],    B.tower.position[2],    LANDMARK_RADIUS],
+    [B.arena.position[0],    B.arena.position[2],    LANDMARK_RADIUS],
+    [B.academy.position[0],  B.academy.position[2],  LANDMARK_RADIUS],
+    [B.cinema.position[0],   B.cinema.position[2],   LANDMARK_RADIUS],
     [B.townhall.position[0], B.townhall.position[2], LANDMARK_RADIUS]
   ];
 }
@@ -428,10 +429,28 @@ export function buildBuildings(seed: number, reserves: Reserve[], density = 1): 
         const plotDensity = zone === 'core' ? Math.min(1, density + 0.12) : density;
         if (rng() > plotDensity) { greenSpots.push([sub.x, sub.z]); continue; }
 
-        // Non-square footprints only spin 0/180° so a quarter-turn can't poke
-        // their long side out across the road; square ones may use any turn.
-        const square = Math.abs(sub.w - sub.d) < 0.6;
-        const rot = square ? (Math.floor(rng() * 4) * Math.PI) / 2 : (rng() < 0.5 ? 0 : Math.PI);
+        // ── Door faces the nearest street ──────────────────────────────
+        // The entrance is on the building's local +Z face. Roads run along all
+        // four cell edges (±CYCLE/2 from the cell centre). Whichever edge this
+        // footprint sits closest to is the street it should front onto, so we
+        // rotate the +Z face toward that edge. rotation-y θ maps local +Z to
+        // world (sinθ, cosθ): 0→+Z, π/2→+X, π→−Z, −π/2→−X.
+        const ddx = sub.x - cx;
+        const ddz = sub.z - cz;
+        let rot: number;
+        if (Math.abs(ddx) >= Math.abs(ddz)) {
+          rot = ddx >= 0 ? Math.PI / 2 : -Math.PI / 2; // face +X / −X road
+        } else {
+          rot = ddz >= 0 ? 0 : Math.PI;                 // face +Z / −Z road
+        }
+        // When rot = ±π/2 the building group rotates 90°: local X → world Z and
+        // local Z → world X. FacadeBuilding renders width along local X and depth
+        // along local Z, so the world footprint becomes (depth × width) instead of
+        // (width × depth). Swap w/d so the rendered world footprint always matches
+        // the sub-tile boundaries that were clipped to fit within the cell edge.
+        const sideways = Math.abs(Math.abs(rot) - Math.PI / 2) < 0.01;
+        const bw = sideways ? sub.d : sub.w; // world X = building's rendered local-X
+        const bd = sideways ? sub.w : sub.d; // world Z = building's rendered local-Z
         const pos: [number, number, number] = [sub.x, 0, sub.z];
 
         // ── Height bucket with rhythm: no two TALL buildings adjacent. ──
@@ -498,7 +517,7 @@ export function buildBuildings(seed: number, reserves: Reserve[], density = 1): 
             break;
           case 'highrise':
             arr.push({
-              kind: 'highrise', pos, w: sub.w, d: sub.d, h,
+              kind: 'highrise', pos, w: bw, d: bd, h,
               body,
               accent: pick(ACCENT_COLORS),
               roof: pick(ROOF_STYLES),
@@ -507,30 +526,30 @@ export function buildBuildings(seed: number, reserves: Reserve[], density = 1): 
             });
             break;
           case 'apartment':
-            arr.push({ kind: 'apartment', pos, w: sub.w, d: sub.d, h: Math.min(h, 14), body, rot });
+            arr.push({ kind: 'apartment', pos, w: bw, d: bd, h: Math.min(h, 14), body, rot });
             break;
           case 'shop':
             arr.push({
-              kind: 'shop', pos, w: sub.w, d: sub.d, h: Math.min(Math.max(h, 6), 9),
+              kind: 'shop', pos, w: bw, d: bd, h: Math.min(Math.max(h, 6), 9),
               body,
               awning: pick([hex.danger, hex.accent, hex.secondary, hex.primary]),
               rot
             });
             break;
           case 'cafe':
-            arr.push({ kind: 'cafe', pos, w: sub.w, d: sub.d, h: Math.min(Math.max(h, 5.5), 8), rot });
+            arr.push({ kind: 'cafe', pos, w: bw, d: bd, h: Math.min(Math.max(h, 5.5), 8), rot });
             break;
           case 'hospital':
-            arr.push({ kind: 'hospital', pos, w: sub.w, d: sub.d, rot });
+            arr.push({ kind: 'hospital', pos, w: bw, d: bd, rot });
             break;
           case 'restaurant':
-            arr.push({ kind: 'restaurant', pos, w: sub.w, d: sub.d, h: Math.min(Math.max(h, 5.5), 8), body, accent: pick([hex.danger, hex.accent, hex.gold]), rot });
+            arr.push({ kind: 'restaurant', pos, w: bw, d: bd, h: Math.min(Math.max(h, 5.5), 8), body, accent: pick([hex.danger, hex.accent, hex.gold]), rot });
             break;
           case 'cinema':
-            arr.push({ kind: 'cinema', pos, w: sub.w, d: sub.d, h: Math.min(Math.max(h, 6), 9), rot });
+            arr.push({ kind: 'cinema', pos, w: bw, d: bd, h: Math.min(Math.max(h, 6), 9), rot });
             break;
           case 'mall':
-            arr.push({ kind: 'mall', pos, w: sub.w, d: sub.d, h: Math.min(Math.max(h, 5), 9), body, rot });
+            arr.push({ kind: 'mall', pos, w: bw, d: bd, h: Math.min(Math.max(h, 5), 9), body, rot });
             break;
         }
       }
@@ -543,9 +562,16 @@ export function buildBuildings(seed: number, reserves: Reserve[], density = 1): 
   // the chunkiest building in each into a real tower, so the skyline reads as an
   // even scattering of landmarks instead of random clumps or flat districts.
   const N_TALL = 10;
+  // Skip cells within one ring of the cinema (0,34) when choosing tower sites,
+  // so all 10 towers spawn OUTSIDE the cinema district (keeps the full count)
+  // and the cinema stays visible. A height clamp below is the final guarantee.
+  const CINEMA_CX = B.cinema.position[0];
+  const CINEMA_CZ = B.cinema.position[2];
+  const CINEMA_RING = 25; // covers the 8 cells surrounding the cinema
   const freeCells: [number, number][] = [];
   for (const fcx of CELL_X) for (const fcz of CELL_Z) {
     if (isReserved(fcx, fcz, reserves, 0)) continue;
+    if (Math.hypot(fcx - CINEMA_CX, fcz - CINEMA_CZ) <= CINEMA_RING) continue;
     freeCells.push([fcx, fcz]);
   }
   const towerCells: [number, number][] = [];
@@ -590,10 +616,21 @@ export function buildBuildings(seed: number, reserves: Reserve[], density = 1): 
     };
   }
 
+  // ── Low-rise ring around the cinema ────────────────────────────────
+  // Final guarantee: any building within one cell-ring of the cinema is
+  // clamped to a normal height so no tower ever overshadows it (catches
+  // natural highrise-kind buildings the tower pass didn't create). Only
+  // lowers heights — no plots emptied, no roads changed.
+  const CINEMA_MAX_H = 10; // normal low/mid height, ≈ the cinema itself
+  for (const b of arr) {
+    if (!('h' in b)) continue;
+    if (Math.hypot(b.pos[0] - CINEMA_CX, b.pos[2] - CINEMA_CZ) <= CINEMA_RING) {
+      b.h = Math.min(b.h, CINEMA_MAX_H);
+    }
+  }
+
   return { buildings: arr, greenSpots };
 }
-
-
 
 /* === Trees & lamps === */
 function distToSegment(px: number, pz: number, a: [number, number], b: [number, number]): number {

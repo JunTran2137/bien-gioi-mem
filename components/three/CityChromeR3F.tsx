@@ -15,6 +15,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/game': '⚔️ Đấu trường',
   '/game/quiz': '⚡ Quiz Arena',
   '/game/debate': '🎭 Nghị trường',
+  '/cinema': '🎬 Rạp Chiếu Phim',
   '/townhall': '🏛️ Tòa thị chính'
 };
 
@@ -39,7 +40,7 @@ export function CityChromeR3F() {
             <Link
               href="/"
               aria-label="Trang chủ"
-              className="rounded-2xl border border-white/40 bg-white/80 px-4 py-3 font-display text-base font-bold text-text backdrop-blur-md transition hover:bg-white"
+              className="rounded-2xl border border-white/40 bg-white/90 px-4 py-3 font-display text-base font-bold text-text transition hover:bg-white"
             >
               🌏 Biên Giới Mềm
             </Link>
@@ -50,14 +51,14 @@ export function CityChromeR3F() {
                 window.dispatchEvent(new Event('world-loading'));
                 requestAnimationFrame(() => router.push('/'));
               }}
-              className="flex items-center gap-1.5 rounded-2xl border border-white/40 bg-white/80 px-4 py-3.5 text-sm font-medium text-text backdrop-blur-md transition hover:bg-white"
+              className="flex items-center gap-1.5 rounded-2xl border border-white/40 bg-white/90 px-4 py-3.5 text-sm font-medium text-text transition hover:bg-white"
             >
               <ArrowLeft className="h-4 w-4" />
               Về thành phố
             </button>
           )}
           {!isHome && (
-            <div className="hidden rounded-2xl border border-white/40 bg-white/70 px-4 py-3.5 text-sm text-muted backdrop-blur-md md:block">
+            <div className="hidden rounded-2xl border border-white/40 bg-white/85 px-4 py-3.5 text-sm text-muted md:block">
               {title}
             </div>
           )}
@@ -67,11 +68,11 @@ export function CityChromeR3F() {
           <button
             onClick={() => setMuted(!muted)}
             aria-label={muted ? 'Bật âm thanh' : 'Tắt âm thanh'}
-            className="rounded-full border border-white/40 bg-white/80 p-2 text-text backdrop-blur-md transition hover:bg-white"
+            className="rounded-full border border-white/40 bg-white/90 p-2 text-text transition hover:bg-white"
           >
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
-          <div className="rounded-2xl border border-white/40 bg-white/80 px-2 py-1 backdrop-blur-md">
+          <div className="rounded-2xl border border-white/40 bg-white/90 px-2 py-1">
             <AuthButton />
           </div>
         </div>
@@ -80,7 +81,7 @@ export function CityChromeR3F() {
       {/* Bottom hint (home only) */}
       {isHome && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center">
-          <div className="rounded-full border border-white/40 bg-white/80 px-4 py-2 text-xs text-muted backdrop-blur-md">
+          <div className="rounded-full border border-white/40 bg-white/90 px-4 py-2 text-xs text-muted">
             Click vào công trình để khám phá · Kéo chuột để xoay · Scroll để thu phóng
           </div>
         </div>

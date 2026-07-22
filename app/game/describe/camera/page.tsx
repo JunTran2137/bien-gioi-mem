@@ -2,95 +2,97 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { getSocket } from '@/lib/socket-client';
 import { cardByMarker } from '@/data/describeCards';
 
 /**
- * /game/describe/camera — per-group phone camera for the "Mô tả & Đoán thẻ" game.
+ * /game/describe/camera — per-group phone camera for the "Luận Giải" game.
  *
- * One phone per group. When a description is on screen, the group holds up the
- * physical card (printed with an ArUco marker) they think it describes. This
- * page detects the marker in-browser and reports it + a live JPEG to the room,
- * tagged with the group's id, so the host board shows every group's guess.
+ * One phone per group. Auto-detects the user's group from session.
  */
 
-const DETECT_WIDTH = 480;
-const FRAME_QUALITY = 0.5;
-const TARGET_FPS = 6;
-
-interface GroupOpt { id: string; name: string }
+const DETECT_WIDTH = 256;   // small canvas for ArUco detection only
+const STREAM_WIDTH = 480;   // full-quality canvas for JPEG streaming
+const FRAME_QUALITY = 0.5;  // restored quality
+const TARGET_FPS = 5;
 
 function CameraInner() {
   const params = useSearchParams();
   const roomCode = (params.get('room') || '').toUpperCase().trim();
-  const presetGroup = params.get('group') || '';
+  const { data: session, status: sessionStatus } = useSession();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);   // detect canvas
+  const frameCanvasRef = useRef<HTMLCanvasElement | null>(null); // stream canvas
   const detectorRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const runningRef = useRef(false);
   const lastTickRef = useRef(0);
-  const groupRef = useRef<string>(presetGroup);
+  const encodingRef = useRef(false); // skip frame if previous toBlob not done
+  const groupRef = useRef<string>('');
 
-  const [groups, setGroups] = useState<GroupOpt[]>([]);
-  const [groupId, setGroupId] = useState<string>(presetGroup);
+  const [groupId, setGroupId] = useState<string>('');
   const [groupName, setGroupName] = useState<string>('');
+  const [groupLoaded, setGroupLoaded] = useState(false);
+  const [alreadyConnected, setAlreadyConnected] = useState(false);
   const [status, setStatus] = useState<'idle' | 'starting' | 'live' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [detected, setDetected] = useState<string | null>(null);
 
   useEffect(() => { groupRef.current = groupId; }, [groupId]);
 
-  // load group list for the picker
+  // Auto-detect group from session
   useEffect(() => {
-    fetch('/api/groups').then(r => r.json()).then(d => {
-      const list: GroupOpt[] = (d?.groups || []).map((g: any) => ({ id: g.id, name: g.name }));
-      setGroups(list);
-      const found = list.find(g => g.id === presetGroup);
-      if (found) setGroupName(found.name);
-    }).catch(() => {});
-  }, [presetGroup]);
+    if (sessionStatus !== 'authenticated') return;
+    fetch('/api/user').then(r => r.json()).then(d => {
+      if (d?.groupId && d?.groupName) {
+        setGroupId(d.groupId);
+        setGroupName(d.groupName);
+        groupRef.current = d.groupId;
+      }
+      setGroupLoaded(true);
+    }).catch(() => setGroupLoaded(true));
+  }, [sessionStatus]);
 
-  // announce to room once a group is chosen
+  // Announce to room once group is known
   useEffect(() => {
     if (!roomCode || !groupId) return;
     const socket = getSocket();
-    const announce = () => socket.emit('dgcam:join', { roomCode, groupId, groupName });
+    const announce = () => socket.emit('dgcam:join', { roomCode, groupId, groupName }, (res: any) => {
+      if (res?.alreadyConnected) setAlreadyConnected(true);
+    });
     if (socket.connected) announce();
     socket.on('connect', announce);
     return () => { socket.off('connect', announce); };
   }, [roomCode, groupId, groupName]);
 
-  const loop = useCallback((now: number) => {
+  const loop = useCallback(() => {
     if (!runningRef.current) return;
-    rafRef.current = requestAnimationFrame(loop);
-    const minGap = 1000 / TARGET_FPS;
-    if (now - lastTickRef.current < minGap) return;
-    lastTickRef.current = now;
-
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const detector = detectorRef.current;
     if (!video || !canvas || !detector || video.readyState < 2) return;
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
-    const w = DETECT_WIDTH;
-    const h = Math.round((vh / vw) * w);
-    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+
+    // ── Detection on small canvas (fast) ──────────────────────────────
+    const dw = DETECT_WIDTH;
+    const dh = Math.round((vh / vw) * dw);
+    if (canvas.width !== dw || canvas.height !== dh) { canvas.width = dw; canvas.height = dh; }
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
-    ctx.drawImage(video, 0, 0, w, h);
+    ctx.drawImage(video, 0, 0, dw, dh);
 
     let tiles: { id: number; center: { x: number; y: number } }[] = [];
     try {
-      const imageData = ctx.getImageData(0, 0, w, h);
+      const imageData = ctx.getImageData(0, 0, dw, dh);
       const markers = detector.detect(imageData) || [];
       tiles = markers.map((m: any) => {
         const cx = (m.corners[0].x + m.corners[1].x + m.corners[2].x + m.corners[3].x) / 4;
         const cy = (m.corners[0].y + m.corners[1].y + m.corners[2].y + m.corners[3].y) / 4;
-        return { id: m.id, center: { x: cx / w, y: cy / h } };
+        return { id: m.id, center: { x: cx / dw, y: cy / dh } };
       });
     } catch { /* skip bad frame */ }
 
@@ -99,12 +101,38 @@ function CameraInner() {
 
     const socket = getSocket();
     const gid = groupRef.current;
-    if (gid) {
-      socket.emit('dgcam:tiles', { roomCode, groupId: gid, tiles });
-      try {
-        const jpeg = canvas.toDataURL('image/jpeg', FRAME_QUALITY);
-        socket.emit('dgcam:frame', { roomCode, groupId: gid, jpeg });
-      } catch { /* ignore */ }
+    if (!gid) return;
+
+    socket.emit('dgcam:tiles', { roomCode, groupId: gid, tiles });
+
+    // ── Stream on full-quality canvas (async toBlob, skip if busy) ────
+    if (!encodingRef.current) {
+      encodingRef.current = true;
+      // Create/reuse a separate canvas for streaming
+      if (!frameCanvasRef.current) {
+        frameCanvasRef.current = document.createElement('canvas');
+      }
+      const fc = frameCanvasRef.current;
+      const fw = STREAM_WIDTH;
+      const fh = Math.round((vh / vw) * fw);
+      if (fc.width !== fw || fc.height !== fh) { fc.width = fw; fc.height = fh; }
+      const fctx = fc.getContext('2d');
+      if (fctx) {
+        fctx.drawImage(video, 0, 0, fw, fh);
+        fc.toBlob((blob) => {
+          encodingRef.current = false;
+          if (!blob || !runningRef.current) return;
+          // Send as binary ArrayBuffer — 33% smaller than base64, no encoding overhead
+          blob.arrayBuffer().then(buf => {
+            if (runningRef.current && gid) {
+              // compress(false): skip deflate on already-compressed JPEG binary
+              socket.compress(false).emit('dgcam:frame', { roomCode, groupId: gid, jpeg: buf });
+            }
+          });
+        }, 'image/jpeg', FRAME_QUALITY);
+      } else {
+        encodingRef.current = false;
+      }
     }
   }, [roomCode]);
 
@@ -135,7 +163,7 @@ function CameraInner() {
       await video.play();
       runningRef.current = true;
       setStatus('live');
-      rafRef.current = requestAnimationFrame(loop);
+      rafRef.current = setInterval(loop, Math.round(1000 / TARGET_FPS)) as any;
     } catch (e: any) {
       setStatus('error');
       setErrorMsg(e?.name === 'NotAllowedError' ? 'Bạn đã từ chối quyền camera.' : 'Không mở được camera: ' + (e?.message || 'lỗi'));
@@ -144,7 +172,7 @@ function CameraInner() {
 
   const stop = useCallback(() => {
     runningRef.current = false;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (rafRef.current) clearInterval(rafRef.current);
     rafRef.current = null;
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
@@ -153,6 +181,40 @@ function CameraInner() {
   }, []);
 
   useEffect(() => () => stop(), [stop]);
+
+  // Hard block: another device from same group is already connected
+  if (alreadyConnected) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center px-4">
+        <div className="w-full max-w-sm bg-surface rounded-2xl border border-danger/40 p-8 text-center space-y-4">
+          <div className="text-4xl">🚫</div>
+          <h2 className="font-display text-xl text-danger">Nhóm đã có camera</h2>
+          <p className="text-muted text-sm">
+            Một thiết bị khác trong nhóm <b className="text-text">{groupName}</b> đã kết nối camera rồi.
+            Mỗi nhóm chỉ được dùng 1 camera.
+          </p>
+          <p className="text-xs text-muted">Đóng trang này — để người khác trong nhóm giữ điện thoại.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Hard block: another device from same group is already connected
+  if (alreadyConnected) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center px-4">
+        <div className="w-full max-w-sm bg-surface rounded-2xl border border-danger/40 p-8 text-center space-y-4">
+          <div className="text-4xl">🚫</div>
+          <h2 className="font-display text-xl text-danger">Nhóm đã có camera</h2>
+          <p className="text-muted text-sm">
+            Một thiết bị khác trong nhóm <b className="text-text">{groupName}</b> đã kết nối camera rồi.<br />
+            Mỗi nhóm chỉ được dùng 1 camera.
+          </p>
+          <p className="text-xs text-muted">Đóng trang này và để người khác trong nhóm giữ điện thoại.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bg text-text flex flex-col">
@@ -165,19 +227,26 @@ function CameraInner() {
       </header>
 
       <main className="flex-1 p-4 flex flex-col gap-4">
-        {!groupId && (
-          <div className="rounded-xl border border-border bg-surface p-4 space-y-2">
-            <p className="text-sm font-semibold">Chọn nhóm của bạn</p>
-            <select
-              className="w-full px-3 py-2 rounded-xl border border-border bg-bg"
-              value={groupId}
-              onChange={e => { setGroupId(e.target.value); setGroupName(groups.find(g => g.id === e.target.value)?.name || ''); }}
-            >
-              <option value="">— Chọn nhóm —</option>
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
+        {/* Loading state */}
+        {!groupLoaded && sessionStatus === 'authenticated' && (
+          <div className="rounded-xl border border-border bg-surface p-4 text-sm text-muted text-center">Đang tải thông tin nhóm…</div>
+        )}
+
+        {/* Not in any group */}
+        {groupLoaded && !groupId && (
+          <div className="rounded-xl border border-danger/40 bg-danger/10 text-danger text-sm px-4 py-3">
+            Bạn chưa được phân vào nhóm nào. Hãy vào trang chủ chọn nhóm trước.
           </div>
         )}
+
+        {/* Group OK — show name */}
+        {groupId && (
+          <div className="rounded-xl border border-primary/30 bg-primary-soft px-4 py-3 text-sm font-semibold text-primary">
+            📱 Camera của <span className="text-text">{groupName || groupId}</span>
+          </div>
+        )}
+
+        {/* Duplicate — hard blocked above, nothing to show here */}
 
         <div className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden border border-border">
           <video ref={videoRef} playsInline muted className="w-full h-full object-contain" />
@@ -211,9 +280,9 @@ function CameraInner() {
         </div>
 
         <ol className="text-sm text-muted space-y-2 leading-relaxed">
-          <li><b className="text-text">1.</b> Chọn đúng nhóm của bạn ở trên.</li>
-          <li><b className="text-text">2.</b> Khi mô tả hiện trên màn hình chính, giơ thẻ (in mã ArUco) bạn cho là đúng trước camera.</li>
-          <li><b className="text-text">3.</b> Tên thẻ nhận diện được sẽ hiện ở đây và trên màn hình quản trò.</li>
+          <li><b className="text-text">1.</b> Khi mô tả hiện trên màn hình chính, giơ thẻ (in mã ArUco) bạn cho là đúng trước camera.</li>
+          <li><b className="text-text">2.</b> Tên thẻ nhận diện được sẽ hiện ở đây và trên màn hình quản trò.</li>
+          <li><b className="text-text">3.</b> Mỗi nhóm chỉ cần 1 điện thoại bật camera.</li>
         </ol>
       </main>
     </div>

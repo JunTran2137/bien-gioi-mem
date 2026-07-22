@@ -224,6 +224,13 @@ export function FacadeBuilding({
   const minTop = Math.min(topW, topD);
   const hasGround = !simple || height < 9;
 
+  // Actual front face of the building in local space — the maximum +Z extent
+  // across all mass tiers. Using depth/2 is wrong when masses have z offsets.
+  const frontZ = useMemo(
+    () => masses.reduce((mx, s) => Math.max(mx, s.z + s.d / 2), 0),
+    [masses],
+  );
+
   return (
     <group position={position} rotation-y={rotation}>
       {/* Plinth / kerb the building sits on (landmark signature). */}
@@ -257,7 +264,7 @@ export function FacadeBuilding({
 
       {/* Window frames (light) behind the glass — one instanced draw call. */}
       {panes.length > 0 && (
-        <Instances limit={panes.length} range={panes.length}>
+        <Instances frames={1} limit={panes.length} range={panes.length}>
           <planeGeometry args={[1, 1]} />
           <meshStandardMaterial color={trim} roughness={0.7} />
           {panes.map((p, i) => (
@@ -268,7 +275,7 @@ export function FacadeBuilding({
 
       {/* Glass panes — one instanced draw call. */}
       {panes.length > 0 && (
-        <Instances limit={panes.length} range={panes.length}>
+        <Instances frames={1} limit={panes.length} range={panes.length}>
           <planeGeometry args={[1, 1]} />
           <meshStandardMaterial ref={glassRef} emissive="#FFE6AE" emissiveIntensity={0.18} color="#9FC2DE" roughness={0.18} metalness={0.35} toneMapped={false} />
           {panes.map((p, i) => (
@@ -291,16 +298,16 @@ export function FacadeBuilding({
             </RoundedBox>
           ) : (
             <>
-              <RoundedBox args={[1.6, 2.2, 0.2]} radius={0.18} smoothness={1} position={[0, 1.5, depth / 2 + 0.45]} castShadow>
+              <RoundedBox args={[1.6, 2.2, 0.2]} radius={0.18} smoothness={1} position={[0, 1.5, frontZ + 0.1]} castShadow>
                 <meshStandardMaterial color="#4A3526" roughness={0.6} />
               </RoundedBox>
-              <RoundedBox args={[2.8, 0.22, 1.0]} radius={0.06} smoothness={1} position={[0, 0.55, depth / 2 + 0.7]}>
+              <RoundedBox args={[2.8, 0.22, 1.0]} radius={0.06} smoothness={1} position={[0, 0.55, frontZ + 0.25]}>
                 <meshStandardMaterial color="#E8E0D0" roughness={0.9} />
               </RoundedBox>
             </>
           )}
           {archetype.details.includes('awningSign' as never) && (
-            <RoundedBox args={[width * 0.9, 0.14, 1.0]} radius={0.05} smoothness={1} position={[0, 2.9, depth / 2 + 0.55]} rotation-x={-0.42} castShadow>
+            <RoundedBox args={[width * 0.9, 0.14, 1.0]} radius={0.05} smoothness={1} position={[0, 2.9, frontZ + 0.2]} rotation-x={-0.42} castShadow>
               <meshStandardMaterial color={accentColor} roughness={0.6} />
             </RoundedBox>
           )}
@@ -321,7 +328,7 @@ function Crown({
     case 'pyramid': {
       const h = minTop * 0.62;
       return (
-        <mesh position={[0, topY + h / 2, 0]} scale={[topW * 1.04, 1, topD * 1.04]} castShadow>
+        <mesh position={[0, topY + 0.22 + h / 2, 0]} scale={[topW * 1.04, 1, topD * 1.04]} castShadow>
           {/* axis-aligned square base (thetaStart π/4) → flush rectangular pyramid */}
           <coneGeometry args={[Math.SQRT1_2, h, 4, 1, false, Math.PI / 4]} />
           <meshStandardMaterial color={roofColor} roughness={0.6} />
@@ -331,7 +338,7 @@ function Crown({
     case 'hip': {
       const h = minTop * 0.42;
       return (
-        <mesh position={[0, topY + h / 2, 0]} scale={[topW * 1.04, 1, topD * 1.04]} castShadow>
+        <mesh position={[0, topY + 0.25 + h / 2, 0]} scale={[topW * 1.04, 1, topD * 1.04]} castShadow>
           <coneGeometry args={[Math.SQRT1_2, h, 4, 1, false, Math.PI / 4]} />
           <meshStandardMaterial color={roofColor} roughness={0.6} />
         </mesh>
@@ -347,7 +354,7 @@ function Crown({
       const triPos = new Float32Array([-halfD, 0, 0, halfD, 0, 0, 0, h, 0]);
       const triNrm = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]);
       return (
-        <group position={[0, topY, 0]}>
+        <group position={[0, topY + 0.25, 0]}>
           {/* two sloped slabs meeting at a ridge running along the width */}
           <mesh position={[0, h / 2, -halfD / 2]} rotation-x={-theta} castShadow>
             <boxGeometry args={[topW + 0.3, 0.16, slope + 0.2]} />

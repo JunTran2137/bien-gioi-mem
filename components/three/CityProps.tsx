@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Instances, Instance } from '@react-three/drei';
 import * as THREE from 'three';
@@ -24,9 +24,39 @@ import { ParkBlock } from './primitives/ParkBlock';
 import { FacadeBuilding } from './primitives/FacadeBuilding';
 import { pickArchetype } from '@/lib/three/buildingArchetypes';
 import { Cars } from './agents/Cars';
-import { Pedestrians } from './agents/Pedestrians';
 
 interface Props { perf: Tier }
+
+/**
+ * Freezes the local/world matrices of every descendant so three stops
+ * recomposing PRS→matrix for hundreds of *static* meshes on every single
+ * frame. Purely a CPU saving — the rendered result is byte-for-byte identical.
+ * Re-runs whenever `deps` change (e.g. new buildings streamed in) so freshly
+ * mounted objects get baked and frozen too.
+ */
+function Static({ children, deps }: { children: React.ReactNode; deps: any[] }) {
+  const ref = useRef<THREE.Group>(null);
+  useLayoutEffect(() => {
+    const g = ref.current;
+    if (!g) return;
+    // Re-enable so the freshly mounted batch can bake correct world matrices,
+    // then bake + freeze the whole subtree.
+    g.matrixWorldAutoUpdate = true;
+    g.traverse((o) => {
+      if (o.matrixAutoUpdate) {
+        o.updateMatrix();
+        o.matrixAutoUpdate = false;
+      }
+    });
+    g.updateMatrixWorld(true);
+    // r150+: with matrixWorldAutoUpdate=false three SKIPS this entire subtree
+    // during scene.updateMatrixWorld() every frame — no per-frame traversal of
+    // the hundreds of static building objects at all.
+    g.matrixWorldAutoUpdate = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return <group ref={ref}>{children}</group>;
+}
 
 /* Warm, varied building tones for plots whose layout entry carries no colour
  * (cafe / cinema), so the streetscape never collapses into a field of grey. */
@@ -118,12 +148,12 @@ export function CityProps({ perf }: Props) {
 
       {/* Plaza paving — circular pedestrian island in the middle (no ring road) */}
       <mesh rotation-x={-Math.PI / 2} position-y={0.04} receiveShadow>
-        <circleGeometry args={[ROUNDABOUT_INNER, 48]} />
+        <circleGeometry args={[ROUNDABOUT_INNER, 24]} />
         <meshStandardMaterial color={hex.sidewalk} roughness={0.85} />
       </mesh>
       {/* Inner plaza decoration ring + gold centrepiece */}
       <mesh rotation-x={-Math.PI / 2} position-y={0.08}>
-        <ringGeometry args={[ROUNDABOUT_INNER - 0.3, ROUNDABOUT_INNER, 48]} />
+        <ringGeometry args={[ROUNDABOUT_INNER - 0.3, ROUNDABOUT_INNER, 24]} />
         <meshStandardMaterial color={hex.primary} roughness={0.6} />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position-y={0.085}>
@@ -141,6 +171,7 @@ export function CityProps({ perf }: Props) {
       <TrafficLights tier={perf} />
 
       {/* Buildings — streamed in over a few frames (progressive mount). */}
+      <Static deps={[shown, layout]}>
       {layout.buildings.slice(0, shown).map((b, i) => {
         if (b.kind === 'highrise') {
           return (
@@ -160,9 +191,7 @@ export function CityProps({ perf }: Props) {
         // forms drawn from the low-rise archetype library.
         return <GenericBuilding key={`b-${i}`} b={b} />;
       })}
-
-      {/* Trees — instanced (2 draw calls for ALL trees regardless of count) */}
-      {layout.trees.length > 0 && <TreesInstanced trees={layout.trees} />}
+      </Static>
 
       {/* Lamps — instanced (2 draw calls for ALL lamps) */}
       {layout.lamps.length > 0 && <LampsInstanced lamps={layout.lamps} />}
@@ -170,7 +199,6 @@ export function CityProps({ perf }: Props) {
       {perf !== 'fallback' && (
         <>
           <Cars count={CAR_COUNT_BY_TIER[perf]} segments={layout.roads} simple={perf !== 'high'} />
-          <Pedestrians count={PED_COUNT_BY_TIER[perf]} segments={layout.roads} simple={perf !== 'high'} />
         </>
       )}
     </group>
@@ -237,7 +265,7 @@ function RoadsInstanced({ roads }: { roads: { from: [number, number]; to: [numbe
   return (
     <group>
       {/* Light kerb / sidewalk slightly wider than the asphalt. */}
-      <Instances limit={n} range={segs.length}>
+      <Instances frames={1} limit={n} range={segs.length}>
         <planeGeometry args={[1, 1]} />
         <meshStandardMaterial color={hex.sidewalk} roughness={0.9} />
         {segs.map((s, i) => (
@@ -245,7 +273,7 @@ function RoadsInstanced({ roads }: { roads: { from: [number, number]; to: [numbe
         ))}
       </Instances>
       {/* Black asphalt — width varies by road class. */}
-      <Instances limit={n} range={segs.length}>
+      <Instances frames={1} limit={n} range={segs.length}>
         <planeGeometry args={[1, 1]} />
         <meshStandardMaterial color={hex.asphalt} roughness={0.92} />
         {segs.map((s, i) => (
@@ -253,7 +281,7 @@ function RoadsInstanced({ roads }: { roads: { from: [number, number]; to: [numbe
         ))}
       </Instances>
       {/* Broken WHITE centre line — real-world dashed lane markings (1 draw call). */}
-      <Instances limit={dn} range={dashes.length}>
+      <Instances frames={1} limit={dn} range={dashes.length}>
         <planeGeometry args={[1, 1]} />
         <meshStandardMaterial color="#F4F1E8" roughness={0.6} />
         {dashes.map((s, i) => (
@@ -332,7 +360,7 @@ function Junctions({ tier }: { tier: Tier }) {
   return (
     <group>
       {/* Clean asphalt junction pads — one instanced draw call. */}
-      <Instances limit={Math.max(pads.length, 1)} range={pads.length}>
+      <Instances frames={1} limit={Math.max(pads.length, 1)} range={pads.length}>
         <planeGeometry args={[1, 1]} />
         <meshStandardMaterial color={hex.asphalt} roughness={0.92} />
         {pads.map((p, i) => (
@@ -342,7 +370,7 @@ function Junctions({ tier }: { tier: Tier }) {
 
       {/* Crosswalk + stop-line markings — one instanced draw call (skipped on low tiers). */}
       {withMarks && marks.length > 0 && (
-        <Instances limit={Math.max(marks.length, 1)} range={marks.length}>
+        <Instances frames={1} limit={Math.max(marks.length, 1)} range={marks.length}>
           <planeGeometry args={[1, 1]} />
           <meshStandardMaterial color="#F2EEDD" roughness={0.7} depthWrite={false} />
           {marks.map((m, i) => (
@@ -398,7 +426,7 @@ function CityRoofs({ buildings }: { buildings: CityLayout['buildings'] }) {
 
   if (flats.length === 0) return null;
   return (
-    <Instances limit={flats.length} range={flats.length}>
+    <Instances frames={1} limit={flats.length} range={flats.length}>
       <boxGeometry args={[1, 1, 1]} />
       <meshStandardMaterial color="#ffffff" roughness={0.8} />
       {flats.map((b, i) => (
@@ -483,7 +511,7 @@ function TrafficLights({ tier }: { tier: Tier }) {
   if (!heads) return null;
   const c = Math.max(heads.poles.length, 1);
   const Lenses = (items: SignalHead[], mat: THREE.Material, key: string) => (
-    <Instances limit={Math.max(items.length, 1)} range={items.length}>
+    <Instances frames={1} limit={Math.max(items.length, 1)} range={items.length}>
       <circleGeometry args={[0.12, 16]} />
       <primitive object={mat} attach="material" />
       {items.map((h, i) => <Instance key={`${key}-${i}`} position={h.p} rotation={[0, h.ry, 0]} />)}
@@ -493,13 +521,13 @@ function TrafficLights({ tier }: { tier: Tier }) {
   return (
     <group>
       {/* Mast poles */}
-      <Instances limit={c} range={heads.poles.length}>
+      <Instances frames={1} limit={c} range={heads.poles.length}>
         <cylinderGeometry args={[0.07, 0.09, 3.4, 8]} />
         <meshStandardMaterial color="#24272E" roughness={0.5} metalness={0.4} />
         {heads.poles.map((p, i) => <Instance key={`tp-${i}`} position={p} />)}
       </Instances>
       {/* Dark signal housings */}
-      <Instances limit={c} range={heads.housings.length}>
+      <Instances frames={1} limit={c} range={heads.housings.length}>
         <boxGeometry args={[0.34, 1.18, 0.26]} />
         <meshStandardMaterial color="#15171C" roughness={0.55} metalness={0.2} />
         {heads.housings.map((h, i) => <Instance key={`th-${i}`} position={h.p} rotation={[0, h.ry, 0]} />)}
@@ -522,14 +550,14 @@ function TreesInstanced({ trees }: { trees: { pos: [number, number, number]; sca
   const limit = Math.max(trees.length, 1);
   return (
     <group>
-      <Instances limit={limit} range={trees.length}>
+      <Instances frames={1} limit={limit} range={trees.length}>
         <cylinderGeometry args={[0.18, 0.22, 1, 6]} />
         <meshStandardMaterial color="#6B4F2C" roughness={1} />
         {trees.map((t, i) => (
           <Instance key={`tt-${i}`} position={[t.pos[0], 0.5 * t.scale, t.pos[2]]} scale={t.scale} />
         ))}
       </Instances>
-      <Instances limit={limit} range={trees.length}>
+      <Instances frames={1} limit={limit} range={trees.length}>
         <sphereGeometry args={[0.95, 6, 5]} />
         <meshStandardMaterial color="#5BA070" roughness={0.85} />
         {trees.map((t, i) => (
@@ -548,14 +576,14 @@ function LampsInstanced({ lamps }: { lamps: { pos: [number, number, number] }[] 
   const limit = Math.max(lamps.length, 1);
   return (
     <group>
-      <Instances limit={limit} range={lamps.length}>
+      <Instances frames={1} limit={limit} range={lamps.length}>
         <cylinderGeometry args={[0.06, 0.08, 3, 6]} />
         <meshStandardMaterial color="#3A3A3A" />
         {lamps.map((l, i) => (
           <Instance key={`lp-${i}`} position={[l.pos[0], 1.5, l.pos[2]]} />
         ))}
       </Instances>
-      <Instances limit={limit} range={lamps.length}>
+      <Instances frames={1} limit={limit} range={lamps.length}>
         <sphereGeometry args={[0.18, 6, 5]} />
         <meshBasicMaterial color="#FFE8A0" />
         {lamps.map((l, i) => (

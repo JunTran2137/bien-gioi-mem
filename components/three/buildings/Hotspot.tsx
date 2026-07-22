@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useRef, useState, useCallback, useEffect } from 'react';
+import { ReactNode, useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react';
 import { useFrame, ThreeEvent } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { useRouter } from 'next/navigation';
@@ -35,6 +35,23 @@ export function Hotspot({ children, position, label, sub, route, onClick, ariaLa
     };
     window.addEventListener('auth-modal-state', onModal);
     return () => window.removeEventListener('auth-modal-state', onModal);
+  }, []);
+
+  // Freeze per-mesh local matrices for children that never move. The Hotspot group
+  // itself still updates (it scales on hover), but the static landmark meshes inside
+  // don't need to recompose position/rotation/scale every frame. Called once on mount.
+  useLayoutEffect(() => {
+    const g = grpRef.current;
+    if (!g) return;
+    g.traverse((child) => {
+      // Skip the group itself (it scales) and any explicitly animated mesh.
+      if (child === g) return;
+      if (child.userData?.animated) return;
+      if ((child as THREE.Mesh).isMesh && child.matrixAutoUpdate) {
+        child.updateMatrix();
+        child.matrixAutoUpdate = false;
+      }
+    });
   }, []);
 
   useFrame((_, delta) => {
@@ -112,10 +129,9 @@ export function Hotspot({ children, position, label, sub, route, onClick, ariaLa
             style={{
               transform: hovered ? 'translateY(0) scale(1.12)' : 'translateY(4px) scale(1)',
               opacity: 1,
-              filter: hovered ? 'drop-shadow(0 8px 18px rgba(46,139,107,0.55))' : 'drop-shadow(0 3px 9px rgba(0,0,0,0.3))'
             }}
           >
-            <div className="rounded-2xl border-2 border-white/60 bg-white/90 px-6 py-3 text-center shadow-xl backdrop-blur-md">
+            <div className="rounded-2xl border-2 border-white/60 bg-white/95 px-6 py-3 text-center shadow-xl">
               <div className="font-display text-2xl font-extrabold tracking-wide text-primary whitespace-nowrap" style={{ textShadow: '0 1px 2px rgba(255,255,255,0.9)' }}>{label}</div>
             </div>
           </div>

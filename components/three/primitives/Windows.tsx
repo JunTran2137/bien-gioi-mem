@@ -70,7 +70,7 @@ export function Windows({
   if (items.length === 0) return null;
 
   return (
-    <Instances limit={items.length} range={items.length}>
+    <Instances frames={1} limit={items.length} range={items.length}>
       <planeGeometry args={[paneW, paneH]} />
       <meshStandardMaterial
         emissive="#FFE6AE"

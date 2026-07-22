@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { RoundedBox } from '@react-three/drei';
 
 const CLOTHES = [
   '#E05C5C', '#4A90D9', '#F4A261', '#2E8B6B', '#9C5BC0', '#FFA89C',
@@ -58,107 +59,78 @@ function Body({
   pose: 'stand' | 'sit'; gender: 'male' | 'female'; seed: number;
 }) {
   const sit = pose === 'sit';
-  // Female slightly shorter & narrower shoulders, longer hair
-  const shoulderW = gender === 'female' ? 0.36 : 0.42;
-  const hipW = gender === 'female' ? 0.32 : 0.30;
   const longHair = gender === 'female' && (seed * 7 % 1) > 0.4;
+  const female = gender === 'female';
+
+  // ONE CapsuleGeometry for the entire torso — zero seams.
+  // CapsuleGeometry(r, length, capSegs, radSegs) creates a smooth pill shape.
+  // Scaled: X wider (human shoulders wider than depth), Z flatter (front-back).
+  //   Male:   r=0.192, len=0.82 → unscaled width=0.384, height=1.20
+  //           scale [1.38, 1, 0.80] → 0.530 wide, 0.307 deep
+  //   Female: r=0.188, len=0.78 → scale [1.28, 1, 0.80] → 0.481 wide, 0.301 deep
+  const tR   = female ? 0.188 : 0.192;  // capsule radius
+  const tLen = female ? 0.60  : 0.65;   // shorter = lower torso height
+  const tScX = female ? 1.44  : 1.58;   // wider shoulders
+  const tScZ = 0.80;                     // z scale → depth < width
+
+  // Arm attachment x = tR * tScX * 0.95 (near outer edge of shoulder sphere)
+  const armX = tR * tScX * 0.95;
+
+  // Torso base Y: capsule center placed so bottom aligns with hips
+  // Capsule total height = 2*r + len. Bottom = center - height/2.
+  // We want bottom at ~0.78 (pants top), so center = 0.78 + (2*tR+tLen)/2
+  const tH    = 2 * tR + tLen;
+  const tCY   = (sit ? 0.80 : 0.78) + tH / 2;   // torso capsule center Y
+
+  // Shoulder sphere: sits at the top shoulder area, overlaps INTO the capsule
+  // by ~0.10 units so the junction is hidden inside both meshes.
+  const shY   = tCY + tLen / 2 + tR * 0.42;      // ~top of cylinder section
+  const shX   = armX;
+  const sZ    = sit ? 0.05 : 0;
+
+  // Neck starts 0.04 inside the capsule top (overlap hides gap)
+  const neckY = tCY + tH / 2 - 0.04;
 
   return (
     <>
-      {/* === SHOES === */}
-      {sit ? (
-        <>
-          <Shoe x={0.11} y={0.05} z={0.78} />
-          <Shoe x={-0.11} y={0.05} z={0.78} />
-        </>
-      ) : (
-        <>
-          <Shoe x={0.11} y={0.04} z={0.08} />
-          <Shoe x={-0.11} y={0.04} z={0.08} />
-        </>
-      )}
+      {/* ── SHOES ── */}
+      {sit ? (<><Shoe x={0.11} y={0.05} z={0.78}/><Shoe x={-0.11} y={0.05} z={0.78}/></>) :
+             (<><Shoe x={0.11} y={0.04} z={0.08}/><Shoe x={-0.11} y={0.04} z={0.08}/></>)}
 
-      {/* === LEGS === */}
-      {sit ? (
-        <>
-          {/* upper legs (thighs) horizontal forward */}
-          <Limb fromX={0.11} fromY={0.86} fromZ={0.05} toX={0.11} toY={0.78} toZ={0.55} r1={0.095} r2={0.085} color={pants} />
-          <Limb fromX={-0.11} fromY={0.86} fromZ={0.05} toX={-0.11} toY={0.78} toZ={0.55} r1={0.095} r2={0.085} color={pants} />
-          {/* lower legs vertical */}
-          <Limb fromX={0.11} fromY={0.78} fromZ={0.55} toX={0.11} toY={0.12} toZ={0.7} r1={0.082} r2={0.07} color={pants} />
-          <Limb fromX={-0.11} fromY={0.78} fromZ={0.55} toX={-0.11} toY={0.12} toZ={0.7} r1={0.082} r2={0.07} color={pants} />
-        </>
-      ) : (
-        <>
-          <Limb fromX={0.11} fromY={0.82} fromZ={0} toX={0.11} toY={0.08} toZ={0} r1={0.1} r2={0.075} color={pants} />
-          <Limb fromX={-0.11} fromY={0.82} fromZ={0} toX={-0.11} toY={0.08} toZ={0} r1={0.1} r2={0.075} color={pants} />
-        </>
-      )}
+      {/* ── LEGS ── */}
+      {sit ? (<>
+        <Limb fromX={0.11} fromY={0.86} fromZ={0.05} toX={0.11} toY={0.78} toZ={0.55} r1={0.095} r2={0.085} color={pants}/>
+        <Limb fromX={-0.11} fromY={0.86} fromZ={0.05} toX={-0.11} toY={0.78} toZ={0.55} r1={0.095} r2={0.085} color={pants}/>
+        <Limb fromX={0.11} fromY={0.78} fromZ={0.55} toX={0.11} toY={0.12} toZ={0.7} r1={0.082} r2={0.07} color={pants}/>
+        <Limb fromX={-0.11} fromY={0.78} fromZ={0.55} toX={-0.11} toY={0.12} toZ={0.7} r1={0.082} r2={0.07} color={pants}/>
+      </>) : (<>
+        <Limb fromX={0.11} fromY={0.82} fromZ={0} toX={0.11} toY={0.08} toZ={0} r1={0.10} r2={0.075} color={pants}/>
+        <Limb fromX={-0.11} fromY={0.82} fromZ={0} toX={-0.11} toY={0.08} toZ={0} r1={0.10} r2={0.075} color={pants}/>
+      </>)}
 
-      {/* === HIPS / BELT === */}
-      <mesh position={[0, sit ? 0.92 : 0.88, sit ? 0.05 : 0]} castShadow>
-        <boxGeometry args={[hipW + 0.04, 0.18, 0.26]} />
-        <meshStandardMaterial color={pants} roughness={0.75} />
-      </mesh>
-      {/* belt strip */}
-      <mesh position={[0, sit ? 1.0 : 0.96, sit ? 0.16 : 0.13]}>
-        <boxGeometry args={[hipW + 0.045, 0.04, 0.01]} />
-        <meshStandardMaterial color="#2A2018" roughness={0.5} metalness={0.3} />
+      {/* ── TORSO — single CapsuleGeometry, NO seams ── */}
+      <mesh position={[0, tCY, sZ]} scale={[tScX, 1, tScZ]} castShadow>
+        <capsuleGeometry args={[tR, tLen, 5, 14]}/>
+        <meshStandardMaterial color={cloth} roughness={0.68}/>
       </mesh>
 
-      {/* === TORSO === tapered (broader top, narrower waist) */}
-      {/* Lower torso */}
-      <mesh position={[0, sit ? 1.18 : 1.13, sit ? 0.05 : 0]} castShadow>
-        <cylinderGeometry args={[hipW * 0.95, hipW, 0.4, 16]} />
-        <meshStandardMaterial color={cloth} roughness={0.7} />
-      </mesh>
-      {/* Upper torso (chest) */}
-      <mesh position={[0, sit ? 1.46 : 1.42, sit ? 0.05 : 0]} castShadow>
-        <cylinderGeometry args={[shoulderW * 0.9, hipW * 0.95, 0.45, 16]} />
-        <meshStandardMaterial color={cloth} roughness={0.7} />
-      </mesh>
-      {/* Shoulder caps */}
-      <mesh position={[shoulderW * 0.78, sit ? 1.58 : 1.55, sit ? 0.05 : 0]} castShadow>
-        <sphereGeometry args={[0.13, 14, 12]} />
-        <meshStandardMaterial color={cloth} roughness={0.7} />
-      </mesh>
-      <mesh position={[-shoulderW * 0.78, sit ? 1.58 : 1.55, sit ? 0.05 : 0]} castShadow>
-        <sphereGeometry args={[0.13, 14, 12]} />
-        <meshStandardMaterial color={cloth} roughness={0.7} />
-      </mesh>
-      {/* Collar / shirt opening */}
-      <mesh position={[0, sit ? 1.66 : 1.63, sit ? 0.13 : 0.08]}>
-        <boxGeometry args={[0.13, 0.07, 0.02]} />
-        <meshStandardMaterial color="#FFFFFF" roughness={0.5} />
-      </mesh>
-
-      {/* === ARMS === */}
-      {/* Upper arm L (cloth) */}
-      <Limb fromX={shoulderW * 0.85} fromY={sit ? 1.55 : 1.5} fromZ={sit ? 0.05 : 0}
-            toX={shoulderW * 0.85} toY={sit ? 1.15 : 1.1} toZ={sit ? 0.05 : 0}
-            r1={0.075} r2={0.065} color={cloth} />
-      <Limb fromX={-shoulderW * 0.85} fromY={sit ? 1.55 : 1.5} fromZ={sit ? 0.05 : 0}
-            toX={-shoulderW * 0.85} toY={sit ? 1.15 : 1.1} toZ={sit ? 0.05 : 0}
-            r1={0.075} r2={0.065} color={cloth} />
-      {/* Forearm L (skin) */}
-      <Limb fromX={shoulderW * 0.85} fromY={sit ? 1.15 : 1.1} fromZ={sit ? 0.05 : 0}
-            toX={shoulderW * 0.85} toY={sit ? 0.78 : 0.75} toZ={sit ? 0.05 : 0}
-            r1={0.065} r2={0.055} color={skin} />
-      <Limb fromX={-shoulderW * 0.85} fromY={sit ? 1.15 : 1.1} fromZ={sit ? 0.05 : 0}
-            toX={-shoulderW * 0.85} toY={sit ? 0.78 : 0.75} toZ={sit ? 0.05 : 0}
-            r1={0.065} r2={0.055} color={skin} />
+      {/* ── ARMS — emerge from the capsule side, no separate shoulder blobs ── */}
+      <Limb fromX={armX} fromY={shY} fromZ={sZ} toX={armX} toY={sit?1.15:1.10} toZ={sZ} r1={0.068} r2={0.060} color={cloth}/>
+      <Limb fromX={-armX} fromY={shY} fromZ={sZ} toX={-armX} toY={sit?1.15:1.10} toZ={sZ} r1={0.068} r2={0.060} color={cloth}/>
+      <Limb fromX={armX} fromY={sit?1.15:1.10} fromZ={sZ} toX={armX} toY={sit?0.78:0.75} toZ={sZ} r1={0.060} r2={0.050} color={skin}/>
+      <Limb fromX={-armX} fromY={sit?1.15:1.10} fromZ={sZ} toX={-armX} toY={sit?0.78:0.75} toZ={sZ} r1={0.060} r2={0.050} color={skin}/>
       {/* Hands */}
-      <Hand x={shoulderW * 0.85} y={sit ? 0.73 : 0.7} z={sit ? 0.05 : 0} skin={skin} />
-      <Hand x={-shoulderW * 0.85} y={sit ? 0.73 : 0.7} z={sit ? 0.05 : 0} skin={skin} />
+      <Hand x={armX} y={sit?0.73:0.70} z={sZ} skin={skin}/>
+      <Hand x={-armX} y={sit?0.73:0.70} z={sZ} skin={skin}/>
 
-      {/* === NECK === */}
-      <mesh position={[0, sit ? 1.75 : 1.72, sit ? 0.05 : 0]} castShadow>
-        <cylinderGeometry args={[0.07, 0.085, 0.12, 12]} />
-        <meshStandardMaterial color={skin} roughness={0.7} />
+      {/* ── NECK — overlaps into capsule top ── */}
+      <mesh position={[0, neckY + 0.06, sZ]} castShadow>
+        <capsuleGeometry args={[0.070, 0.08, 3, 10]}/>
+        <meshStandardMaterial color={skin} roughness={0.65}/>
       </mesh>
 
       {/* === HEAD === */}
-      <Head skin={skin} hair={hair} y={sit ? 1.98 : 1.95} z={sit ? 0.05 : 0} longHair={longHair} />
+      <Head skin={skin} hair={hair} y={neckY + 0.22} z={sZ} longHair={longHair} />
     </>
   );
 }

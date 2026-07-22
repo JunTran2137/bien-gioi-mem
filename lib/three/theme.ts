@@ -60,13 +60,13 @@ export const hex = {
 };
 
 /* === Chess-grid building layout ===
- * Plaza ring at center (0,0). Five landmarks sit on EXACT grid-cell centers
+ * Plaza ring at center (0,0). Six landmarks sit on EXACT grid-cell centers
  * (±34 = cell index 5 of the 7-cell grid, since centers = (i-3)·17).
  * Landing each landmark on a cell center means its footprint fills one whole
  * 15×15 cell and never straddles a road, so the road network stays intact.
- *   Row -1 (z=-34):  Library  ·  Tower  ·  Arena
+ *   Row -1 (z=-34):  Library  ·  Tower   ·  Arena
  *   Row  0 (z=  0):  ........  PLAZA  ........
- *   Row +1 (z=+34):  Academy  ·  ......  ·  TownHall
+ *   Row +1 (z=+34):  Academy  ·  Cinema  ·  TownHall
  */
 export const buildings = {
   globe:    { position: [0, 0, 0]      as const, label: '🌏 Biên Giới Mềm' },
@@ -74,6 +74,7 @@ export const buildings = {
   tower:    { position: [0, 0, -34]    as const, label: '🏆 Đài vinh danh', sub: 'Bảng xếp hạng',   route: '/leaderboard' },
   arena:    { position: [34, 0, -34]   as const, label: '⚔️ Đấu trường',  sub: 'Game',             route: '/game'        },
   academy:  { position: [-34, 0, 34]   as const, label: '🎓 Học viện',    sub: 'Flashcard',        route: '/flashcards'  },
+  cinema:   { position: [0, 0, 34]     as const, label: '🎬 Rạp Chiếu Phim', sub: 'Xem phim',       route: '/cinema'      },
   townhall: { position: [34, 0, 34]    as const, label: '🏛️ Tòa thị chính', sub: 'Đăng nhập / Nhóm', route: '/townhall' }
 };
 
@@ -117,7 +118,10 @@ export const cameraPresets: Record<string, CameraPreset> = {
   '/game/debate':   { position: [34, 5, -20],   lookAt: [34, 4, -38],      fov: 70 },
   // TownHall: 32w × 26d × 11h at (34,0,34). Auth/login panel at world (34,3.5,29).
   // Land close, framed straight on the login panel.
-  '/townhall':      { position: [34, 4, 38],    lookAt: [34, 3.6, 29],     fov: 52 }
+  '/townhall':      { position: [34, 4, 38],    lookAt: [34, 3.6, 29],     fov: 52 },
+  // Cinema: 28w × 28d × 10h at (0,0,34). 3 sections × 8 rows × 5 seats, 4 steps.
+  // Camera sits high above back rows giving a full auditorium overview.
+  '/cinema':        { position: [0, 4.0, 39],   lookAt: [0, 1.5, 22],      fov: 72 },
 };
 
 /* Exterior "front-of-building" poses (chính diện).
@@ -133,6 +137,7 @@ export const approachPoses: Record<string, CameraPreset> = {
   '/flashcards':  { position: [-34, 21, 54],  lookAt: [-34, 5, 34],  fov: 52 }, // Academy
   '/leaderboard': { position: [0, 22, -14],   lookAt: [0, 6, -34],   fov: 52 }, // Tower
   '/game':        { position: [34, 21, -14],  lookAt: [34, 4, -34],  fov: 56 }, // Arena
+  '/cinema':      { position: [0, 21, 54],    lookAt: [0, 5, 34],    fov: 52 }, // Cinema
   '/townhall':    { position: [34, 21, 54],   lookAt: [34, 5, 34],   fov: 52 }  // TownHall
 };
 

@@ -79,11 +79,27 @@ export function useDescribeGame() {
   const [prepareTimeLeft, setPrepareTimeLeft] = useState(0);
   const [rebuttalTimeLeft, setRebuttalTimeLeft] = useState(0);
 
-  const isHostMe = uid != null && uid === hostUid;
+  // While waiting for the server ack (hostUid still null), trust the URL param.
+  const isHostMe = uid != null && (hostUid !== null ? uid === hostUid : isHost);
   const phase = state?.phase || 'lobby';
   const reveal = state?.reveal || null;
   const subPhase = reveal?.subPhase || null;
   const amIScribe = uid != null && scribes[myGroupId] === uid;
+
+  /* ---- reset state on room change ---- */
+  useEffect(() => {
+    if (!roomCode) return;
+    setPlayers([]);
+    setHostUid(null);
+    setState(null);
+    setScribes({});
+    setCameras({});
+    setLiveGuesses({});
+    setRebuttalEnded(false);
+    setFinished(null);
+    setPrepareTimeLeft(0);
+    setRebuttalTimeLeft(0);
+  }, [roomCode]);
 
   /* ---- auth guard ---- */
   useEffect(() => {
@@ -112,10 +128,6 @@ export function useDescribeGame() {
         if (cancelled) return;
         if (!res?.ok) {
           attempt += 1;
-          if (isHost) {
-            socket.emit('dg:create', { hostUid: uid, roomCode }, () => setTimeout(doJoin, 400));
-            return;
-          }
           if (attempt < MAX_ATTEMPTS) { setTimeout(doJoin, 1200); return; }
           toast({ title: 'Không vào được phòng', description: res?.error || 'Phòng không tồn tại', variant: 'danger' });
           router.replace('/game');
@@ -126,8 +138,23 @@ export function useDescribeGame() {
         setState(res.state);
       });
     };
-    if (isHost) socket.emit('dg:create', { hostUid: uid, roomCode }, () => doJoin());
-    else doJoin();
+    if (isHost) {
+      socket.emit('dg:create', { hostUid: uid, roomCode }, (res: any) => {
+        if (cancelled) return;
+        if (res?.ok) {
+          // Only block imposters when both values are known non-null strings.
+          if (uid && res.hostUid && res.hostUid !== uid) {
+            router.replace(`/game/describe?room=${roomCode}`);
+            return;
+          }
+          setHostUid(res.hostUid);
+          setState(res.state);
+          setPlayers(res.players || []);
+        } else {
+          router.replace(`/game/describe?room=${roomCode}`);
+        }
+      });
+    } else doJoin();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, connected, uid, user?.groupId, roomCode]);
@@ -138,8 +165,10 @@ export function useDescribeGame() {
     const onPlayers = (l: DGPlayer[]) => setPlayers(l);
     const onState = (s: DGState) => {
       setState(s);
+      if (Array.isArray((s as any).players)) setPlayers((s as any).players);
+      // scribes are now embedded in every state snapshot
+      if ((s as any).scribes && typeof (s as any).scribes === 'object') setScribes((s as any).scribes);
       if (s.reveal?.subPhase === 'showing') setLiveGuesses(s.reveal.guesses || {});
-      // If we missed the dg:finished event (e.g. during a reconnect), synthesise it
       if (s.status === 'finished') setFinished(prev => prev ?? { standings: s.groups, winner: s.groups[0] ?? null });
     };
     const onStarted = (d: { scribes: Record<string, string> }) => { setScribes(d.scribes || {}); setFinished(null); };
@@ -233,7 +262,7 @@ export function useDescribeGame() {
   const myStance = reveal?.stances?.[myGroupId] || null;
 
   return {
-    roomCode, uid, isHostMe, user, connected,
+    roomCode, uid, isHostMe, isHost, user, connected,
     players, hostUid, state, phase, reveal, subPhase,
     scribes, amIScribe, myGroupId, groupNameMap,
     cameras, liveGuesses, rebuttalEnded, finished,

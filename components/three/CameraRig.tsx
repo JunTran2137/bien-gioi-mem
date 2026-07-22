@@ -17,7 +17,7 @@ function easeInOutCubic(t: number) {
 const PAN_BOUNDS_CITY = { minX: -50, maxX: 50, minZ: -50, maxZ: 50 };
 
 /** Per-route interior camera bounds (around the room center). */
-type RoomBounds = { center: [number, number]; halfX: number; halfZ: number; minDist: number; maxDist: number; maxRadius?: number; maxPolar?: number };
+type RoomBounds = { center: [number, number]; halfX: number; halfZ: number; minDist: number; maxDist: number; maxRadius?: number; maxPolar?: number; rectClamp?: boolean };
 const ROOM_BOUNDS: Record<string, RoomBounds> = {
   '/theory':      { center: [B.library.position[0], B.library.position[2]],   halfX: 16, halfZ: 13, minDist: 4, maxDist: 28 },
   '/flashcards':  { center: [B.academy.position[0], B.academy.position[2]],   halfX: 9, halfZ: 7, minDist: 4, maxDist: 14, maxPolar: 0.49 },
@@ -28,7 +28,8 @@ const ROOM_BOUNDS: Record<string, RoomBounds> = {
   '/game':        { center: [B.arena.position[0], B.arena.position[2]],       halfX: 13, halfZ: 13, minDist: 4, maxDist: 11, maxRadius: 13, maxPolar: 0.66 },
   '/game/quiz':   { center: [B.arena.position[0], B.arena.position[2]],       halfX: 13, halfZ: 13, minDist: 4, maxDist: 11, maxRadius: 13, maxPolar: 0.66 },
   '/game/debate': { center: [B.arena.position[0], B.arena.position[2]],       halfX: 18, halfZ: 18, minDist: 4, maxDist: 32 },
-  '/townhall':    { center: [B.townhall.position[0], B.townhall.position[2]], halfX: 14, halfZ: 12, minDist: 4, maxDist: 28 }
+  '/townhall':    { center: [B.townhall.position[0], B.townhall.position[2]], halfX: 14, halfZ: 12, minDist: 4, maxDist: 28 },
+  '/cinema':      { center: [B.cinema.position[0],   B.cinema.position[2]],   halfX: 13, halfZ: 9, minDist: 3, maxDist: 16, maxPolar: 0.72, rectClamp: true }
 };
 
 interface Props {
@@ -408,6 +409,26 @@ export function CameraRig({ disabled = false }: Props) {
       }
       if (camera.position.y > 8) { camera.position.y = 8; clamped = true; }
       if (camera.position.y < 2) { camera.position.y = 2; clamped = true; }
+      if (clamped) {
+        camera.lookAt(ctrl.target.x, ctrl.target.y, ctrl.target.z);
+      }
+    }
+
+    // ── HARD post-update containment for rectangular rooms (cinema) ──────
+    // Same problem as arenas: update() re-derives the camera position from its
+    // spherical state (distance up to maxDist), overwriting the pre-update
+    // clamp and letting the camera slip through the walls. Force it back inside
+    // the box AFTER update() and re-aim at the target.
+    if (room && room.rectClamp) {
+      const minX = room.center[0] - room.halfX, maxX = room.center[0] + room.halfX;
+      const minZ = room.center[1] - room.halfZ, maxZ = room.center[1] + room.halfZ;
+      let clamped = false;
+      if (camera.position.x < minX) { camera.position.x = minX; clamped = true; }
+      if (camera.position.x > maxX) { camera.position.x = maxX; clamped = true; }
+      if (camera.position.z < minZ) { camera.position.z = minZ; clamped = true; }
+      if (camera.position.z > maxZ) { camera.position.z = maxZ; clamped = true; }
+      if (camera.position.y > 8.5) { camera.position.y = 8.5; clamped = true; }
+      if (camera.position.y < 1.5) { camera.position.y = 1.5; clamped = true; }
       if (clamped) {
         camera.lookAt(ctrl.target.x, ctrl.target.y, ctrl.target.z);
       }

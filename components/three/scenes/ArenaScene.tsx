@@ -214,7 +214,7 @@ export function ArenaScene() {
         height={2.4}
         color={palette.primary}
         emissive={palette.primary}
-        onClick={() => router.push('/game?play=quiz')}
+        onClick={() => router.push('/game?play=describe')}
         ariaLabel="Quiz"
       >
         <Text position={[0, 0.4, 0.18]} fontSize={0.4} color="#fff" anchorX="center" anchorY="middle">⚡ Quiz</Text>
@@ -229,12 +229,12 @@ export function ArenaScene() {
         height={2.4}
         color={palette.secondary}
         emissive={palette.secondary}
-        onClick={() => create('debate')}
+        onClick={() => router.push('/game?play=debate')}
         ariaLabel="Tranh luận"
       >
         <Text position={[0, 0.4, 0.18]} fontSize={0.4} color="#fff" anchorX="center" anchorY="middle">🎭 Tranh luận</Text>
         <Text position={[0, -0.3, 0.18]} fontSize={0.16} color="#fff" anchorX="center" anchorY="middle" maxWidth={3.2}>
-          {busy === 'debate' ? 'Đang tạo phòng…' : '5 phase · phản biện realtime'}
+          5 phase · phản biện realtime
         </Text>
       </Button3D>
     </group>

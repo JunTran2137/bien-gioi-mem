@@ -43,7 +43,7 @@ export function Mall({
       </RoundedBox>
 
       {/* glass window bands (1 draw call) */}
-      <Instances limit={Math.max(bands.length, 1)} range={bands.length}>
+      <Instances frames={1} limit={Math.max(bands.length, 1)} range={bands.length}>
         <boxGeometry args={[width * 0.86, (height / floors) * 0.5, 0.06]} />
         <meshStandardMaterial color="#9FC6E8" emissive="#7FB0DC" emissiveIntensity={0.18} roughness={0.15} metalness={0.5} />
         {bands.map((p, i) => (

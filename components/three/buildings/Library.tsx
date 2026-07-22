@@ -30,12 +30,11 @@ export function Library() {
       <RoundedBox args={[5.2, 7.5, 0.4]} radius={0.3} smoothness={2} position={[0, 8.6, 3.0]} castShadow>
         <meshPhysicalMaterial
           color="#A8E5D0"
-          transmission={0.4}
           roughness={0.15}
           metalness={0.2}
-          clearcoat={0.8}
-          thickness={0.4}
-          opacity={0.85}
+          clearcoat={0.9}
+          clearcoatRoughness={0.05}
+          opacity={0.82}
           transparent
         />
       </RoundedBox>

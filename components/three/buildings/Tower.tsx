@@ -4,7 +4,7 @@ import { RoundedBox } from '@react-three/drei';
 import { Hotspot } from './Hotspot';
 import { buildings, hex } from '@/lib/three/theme';
 import { VnText as Text } from '../primitives/VnText';
-import { useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -13,6 +13,11 @@ const cfg = buildings.tower;
 /** Tiered crystal trophy tower — gold + lavender pastel rings tapering to a glowing crystal. */
 export function Tower() {
   const crystalRef = useRef<THREE.Mesh>(null);
+
+  // Mark crystal as animated so Hotspot's static-freeze skips it.
+  useLayoutEffect(() => {
+    if (crystalRef.current) crystalRef.current.userData.animated = true;
+  }, []);
 
   useFrame(({ clock }) => {
     if (crystalRef.current) {
@@ -71,12 +76,13 @@ export function Tower() {
         <meshPhysicalMaterial
           color="#FFD93D"
           emissive="#FFD93D"
-          emissiveIntensity={0.6}
-          metalness={0.3}
-          roughness={0.1}
+          emissiveIntensity={0.85}
+          metalness={0.4}
+          roughness={0.08}
           clearcoat={1}
-          transmission={0.3}
-          thickness={0.5}
+          clearcoatRoughness={0.04}
+          opacity={0.88}
+          transparent
         />
       </mesh>
 

@@ -1,8 +1,9 @@
 'use client';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getSocket } from '@/lib/socket-client';
 import {
   Copy, Check, Users, Trophy, Camera, Flag, Eye, ThumbsUp, ThumbsDown,
   Megaphone, Send, ArrowRight, Crown, Timer, Sparkles
@@ -63,7 +64,7 @@ export function DescribeRoom() {
         <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
           <div>
             <h1 className="font-display text-2xl md:text-3xl text-text flex items-center gap-2">
-              <Eye className="text-primary" /> Mô Tả &amp; Đoán Thẻ
+              <Eye className="text-primary" /> Luận Giải
             </h1>
             <p className="text-muted text-sm mt-0.5">
               {g.phase === 'lobby' && 'Chờ các nhóm vào phòng'}
@@ -90,7 +91,7 @@ export function DescribeRoom() {
             {g.phase === 'prepare' && <Prepare g={g} groups={groups} />}
             {g.phase === 'reveal' && <RevealStage g={g} groups={groups} />}
           </div>
-          <Scoreboard groups={groups} myGroupId={g.myGroupId} />
+          {g.phase !== 'lobby' && <Scoreboard groups={groups} myGroupId={g.myGroupId} />}
         </div>
       </div>
     </div>
@@ -101,16 +102,41 @@ export function DescribeRoom() {
 function RoleGate({ creating, onHost }: { creating: boolean; onHost: () => void }) {
   const router = useRouter();
   const [code, setCode] = useState('');
+  const [showRules, setShowRules] = useState(false);
+
+  if (showRules) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-lg bg-surface rounded-2xl border border-border shadow-xl p-8 space-y-5">
+          <h2 className="font-display text-2xl text-text">Luật chơi — Luận Giải</h2>
+          <ol className="space-y-3 text-sm text-text list-decimal list-inside">
+            <li><span className="font-semibold">Chuẩn bị (5 phút):</span> Mỗi nhóm được phân ngẫu nhiên 1 người viết. Người đó chọn 3 thẻ vật lý và viết 3 mô tả gợi ý — không được nói thẳng tên thẻ.</li>
+            <li><span className="font-semibold">Giơ thẻ:</span> Khi mô tả được hiện, các nhóm khác cầm thẻ mà mình nghĩ là đúng giơ trước camera. Camera tự đọc mã ArUco.</li>
+            <li><span className="font-semibold">Đoán đúng:</span> Nhóm đoán đúng +100 điểm. Nhóm viết mô tả bị trừ − 10 điểm cho mỗi nhóm đoán đúng (mô tả dễ quá thì thiệt!).</li>
+            <li><span className="font-semibold">Phản đối:</span> Sau khi đáp án được công bố, các nhóm có thể Đồng ý hoặc Phản đối. Nếu có phản đối, quản trò mở vòng phản biện 30 giây.</li>
+            <li><span className="font-semibold">Bỏ phiếu:</span> Sau phản biện, tất cả bỏ phiếu chọn thẻ nào đúng. Thẻ được vote nhiều nhất là đáp án chính thức.</li>
+          </ol>
+          <div className="flex gap-3 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setShowRules(false)}>Quay lại</Button>
+            <Button className="flex-1" onClick={onHost} disabled={creating}>
+              {creating ? 'Đang tạo phòng…' : 'Tiếp tục'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-surface rounded-2xl border border-border shadow-xl p-8 space-y-6">
         <div className="text-center">
           <Eye className="mx-auto text-primary mb-2" size={40} />
-          <h1 className="font-display text-2xl text-text">Mô Tả &amp; Đoán Thẻ</h1>
+          <h1 className="font-display text-2xl text-text">Luận Giải</h1>
           <p className="text-muted text-sm mt-1">Mỗi nhóm mô tả thẻ của mình, các nhóm khác giơ thẻ đoán.</p>
         </div>
-        <Button className="w-full" onClick={onHost} disabled={creating}>
-          {creating ? 'Đang tạo phòng…' : 'Tạo phòng (Quản trò)'}
+        <Button className="w-full" onClick={() => setShowRules(true)}>
+          Tạo phòng
         </Button>
         <div className="flex items-center gap-2">
           <div className="h-px flex-1 bg-border" /><span className="text-xs text-muted">hoặc</span><div className="h-px flex-1 bg-border" />
@@ -137,27 +163,69 @@ function Lobby({ g, groups }: { g: any; groups: any[] }) {
     return m;
   }, [g.players]);
 
+  // Groups that have joined but don't have a camera connected yet
+  const missingCamGroups: string[] = Object.keys(byGroup).filter(
+    gid => gid !== '__no_group__' && !g.cameras[gid]?.connected
+  );
+  const myGroupMissingCam = !g.isHostMe && !g.isHost && g.myGroupId !== '__no_group__' && !g.cameras[g.myGroupId]?.connected;
+
   return (
     <div className="bg-surface rounded-2xl border border-border p-5 space-y-5">
       <div className="flex items-center gap-2 text-text font-semibold">
         <Users size={18} className="text-primary" /> {g.players.length} người · {Object.keys(byGroup).length} nhóm
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
-        {Object.entries(byGroup).map(([gid, members]) => (
+        {Object.entries(byGroup).sort(([, a], [, b]) => {
+          const nameA = (a as any[])[0]?.groupName || '';
+          const nameB = (b as any[])[0]?.groupName || '';
+          return nameA.localeCompare(nameB, 'vi', { numeric: true });
+        }).map(([gid, members]) => {
+          const camOk = g.cameras[gid]?.connected;
+          return (
           <div key={gid} className="rounded-xl border border-border p-3" style={{ borderLeftWidth: 4, borderLeftColor: colorForGroup(gid, groups) }}>
-            <div className="font-semibold text-text text-sm mb-1">{members[0]?.groupName || 'Khách'}</div>
-            <div className="text-xs text-muted">{members.map(m => m.name).join(', ')}</div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="font-semibold text-text text-sm">{(members as any[])[0]?.groupName || 'Khách'}</div>
+              <span className={cn('text-[11px] px-2 py-0.5 rounded-full font-medium', camOk ? 'bg-primary-soft text-primary' : 'bg-accent/15 text-accent')}>
+                {camOk ? '📷 Camera ✓' : '⚠️ Chưa có camera'}
+              </span>
+            </div>
+            <div className="text-xs text-muted">{(members as any[]).map((m: any) => m.name).join(', ')}</div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div className="rounded-xl bg-primary-soft p-4 text-sm text-text space-y-2">
-        <p className="font-semibold flex items-center gap-1"><Camera size={15} /> Chuẩn bị camera</p>
-        <p className="text-muted">Mỗi nhóm mở 1 điện thoại tại <span className="font-mono">/game/describe/camera?room={g.roomCode}</span> và chọn nhóm mình để giơ thẻ khi đoán.</p>
-      </div>
+      {/* Player: my group hasn't connected camera yet */}
+      {myGroupMissingCam && (
+        <div className="rounded-xl border border-accent/50 bg-accent/10 p-4 text-sm space-y-1">
+          <p className="font-semibold text-accent flex items-center gap-1"><Camera size={15} /> Nhóm bạn chưa kết nối camera!</p>
+          <p className="text-muted">Mở <span className="font-mono font-medium text-text">/game/describe/camera?room={g.roomCode}</span> trên điện thoại và đăng nhập để kết nối.</p>
+        </div>
+      )}
 
-      {g.isHostMe ? (
-        <Button className="w-full" size="lg" onClick={g.startGame}>Bắt đầu — Chuẩn bị mô tả (5 phút)</Button>
+      {/* Player: camera connected */}
+      {(!g.isHostMe && !g.isHost && !myGroupMissingCam && g.myGroupId !== '__no_group__') && (
+        <div className="rounded-xl bg-primary-soft p-3 text-sm text-primary font-medium flex items-center gap-2">
+          <Camera size={15} /> Camera nhóm bạn đã kết nối ✓
+        </div>
+      )}
+
+      {/* Host: list groups without camera */}
+      {(g.isHostMe || g.isHost) && missingCamGroups.length > 0 && (
+        <div className="rounded-xl border border-accent/50 bg-accent/10 p-4 text-sm">
+          <p className="font-semibold text-accent flex items-center gap-1"><Camera size={15} /> {missingCamGroups.length} nhóm chưa kết nối camera</p>
+        </div>
+      )}
+
+      {(!g.isHostMe && !g.isHost) && (
+        <div className="rounded-xl bg-primary-soft p-4 text-sm text-text space-y-2">
+          <p className="font-semibold flex items-center gap-1"><Camera size={15} /> Chuẩn bị camera</p>
+          <p className="text-muted">Mỗi nhóm mở 1 điện thoại tại <span className="font-mono">/game/describe/camera?room={g.roomCode}</span> và chọn nhóm mình để giơ thẻ khi đoán.</p>
+        </div>
+      )}
+
+      {(g.isHostMe || g.isHost) ? (
+        <Button className="w-full" size="lg" onClick={g.startGame}>Bắt đầu</Button>
       ) : (
         <p className="text-center text-muted text-sm">Chờ quản trò bắt đầu…</p>
       )}
@@ -202,7 +270,7 @@ function Prepare({ g, groups }: { g: any; groups: any[] }) {
         </div>
       </div>
 
-      {g.isHostMe && (
+      {(g.isHostMe || g.isHost) && (
         <Button variant="outline" className="w-full" onClick={g.endPrepare}>Kết thúc chuẩn bị sớm →</Button>
       )}
     </div>
@@ -292,6 +360,35 @@ function CameraGrid({ g, groups }: { g: any; groups: any[] }) {
   const r = g.reveal;
   const ids: string[] = r?.guesserGroupIds || [];
   const guesses = r?.subPhase === 'showing' ? g.liveGuesses : (r?.guesses || {});
+  // Decode JPEG off main thread via createImageBitmap, draw to <canvas>
+  const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
+  useEffect(() => {
+    const socket = getSocket();
+    const onFrame = (d: { groupId: string; jpeg: ArrayBuffer | string }) => {
+      if (!(d.jpeg instanceof ArrayBuffer)) return;
+      const canvas = canvasRefs.current[d.groupId];
+      if (!canvas) return;
+      const blob = new Blob([d.jpeg], { type: 'image/jpeg' });
+      if (typeof createImageBitmap !== 'undefined') {
+        createImageBitmap(blob).then(bmp => {
+          const cv = canvasRefs.current[d.groupId];
+          if (!cv) { bmp.close(); return; }
+          if (cv.width !== bmp.width || cv.height !== bmp.height) {
+            cv.width = bmp.width; cv.height = bmp.height;
+          }
+          cv.getContext('2d')?.drawImage(bmp, 0, 0);
+          bmp.close();
+        }).catch(() => {});
+      } else {
+        // Fallback: object URL on img element
+        const url = URL.createObjectURL(blob);
+        const img = canvas as unknown as HTMLImageElement;
+        img.src = url;
+      }
+    };
+    socket.on('dg:cameraFrame', onFrame);
+    return () => { socket.off('dg:cameraFrame', onFrame); };
+  }, []);
   return (
     <div>
       <p className="text-sm font-semibold text-text mb-2 flex items-center gap-1"><Camera size={15} /> Các nhóm giơ thẻ đoán</p>
@@ -305,12 +402,13 @@ function CameraGrid({ g, groups }: { g: any; groups: any[] }) {
               'rounded-xl overflow-hidden border bg-black/80 relative aspect-[4/3]',
               correct === true ? 'border-primary border-2' : correct === false ? 'border-danger border-2' : 'border-border'
             )}>
-              {cam?.jpeg ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={cam.jpeg} alt="" className="w-full h-full object-cover" />
-              ) : (
+              <canvas
+                ref={el => { canvasRefs.current[gid] = el; }}
+                className={cn('w-full h-full object-cover', cam?.connected ? '' : 'hidden')}
+              />
+              {!cam?.connected && (
                 <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">
-                  {cam?.connected ? 'Đang chờ hình…' : 'Chưa kết nối camera'}
+                  Chưa kết nối camera
                 </div>
               )}
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1">
@@ -357,12 +455,10 @@ function HostControls({ g }: { g: any }) {
         <div className="space-y-3 text-center">
           <p className="text-sm text-muted">Vòng phản biện {r.rebuttalRound}</p>
           <Countdown seconds={g.rebuttalTimeLeft} big />
-          {g.rebuttalEnded && (
-            <div className="flex gap-2">
-              <Button variant="secondary" className="flex-1" onClick={g.startRebuttal}>Tiếp tục phản biện</Button>
-              <Button className="flex-1" onClick={g.endRebuttal}>Kết thúc → Bỏ phiếu</Button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={g.startRebuttal}>Tiếp tục</Button>
+            <Button className="flex-1" onClick={g.endRebuttal}>Kết thúc</Button>
+          </div>
         </div>
       )}
 
@@ -486,7 +582,7 @@ function VotePopup({ g }: { g: any }) {
         <option value="">— Chọn thẻ bạn cho là đúng —</option>
         {describeCards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
-      <Button className="w-full" onClick={submit}>{done ? 'Đã gửi ✓ — Đổi phiếu' : 'Gửi phiếu'}</Button>
+      <Button className="w-full" onClick={submit}>{done ? 'Đổi phiếu' : 'Gửi phiếu'}</Button>
       <VoteTally tally={g.reveal?.voteTally || []} />
     </div>
   );

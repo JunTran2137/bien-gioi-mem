@@ -16,3 +16,4 @@ npm-debug.log*
 .idea/
 next-env.d.ts
 certs/
+*.pem
