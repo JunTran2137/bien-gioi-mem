@@ -1,0 +1,14 @@
+biengioimem.juntran.id.vn {
+	reverse_proxy app:3000 {
+		# WebSocket support (Socket.io)
+		header_up Host {upstream_hostport}
+		transport http {
+			dial_timeout 30s
+		}
+	}
+
+	# Logs
+	log {
+		output stderr
+	}
+}
