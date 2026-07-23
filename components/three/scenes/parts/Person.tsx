@@ -69,7 +69,7 @@ function Body({
   //           scale [1.38, 1, 0.80] → 0.530 wide, 0.307 deep
   //   Female: r=0.188, len=0.78 → scale [1.28, 1, 0.80] → 0.481 wide, 0.301 deep
   const tR   = female ? 0.188 : 0.192;  // capsule radius
-  const tLen = female ? 0.60  : 0.65;   // shorter = lower torso height
+  const tLen = female ? 0.50  : 0.55;   // shorter = lower torso height
   const tScX = female ? 1.44  : 1.58;   // wider shoulders
   const tScZ = 0.80;                     // z scale → depth < width
 

@@ -142,14 +142,15 @@ export function CinemaScene() {
             🎬  CHỌN PHIM
           </Text>
           {cinemaVideos.map((v, i) => {
-            const colW = (SCREEN_W - 2) / 3;
-            const px = (i - 1) * colW;
+            const n = cinemaVideos.length;
+            const colW = (SCREEN_W - 2) / Math.max(n, 1);
+            const px = (i - (n - 1) / 2) * colW;
             return (
               <PosterPanel
                 key={v.id}
                 video={v}
                 position={[px, -0.5, 0.06]}
-                width={colW - 0.5}
+                width={Math.min(colW - 0.5, 6)}
                 height={SCREEN_H - 2.2}
                 onSelect={() => selectVideo(v)}
               />
@@ -359,23 +360,10 @@ function PosterPanel({
           <meshBasicMaterial color={hovered ? '#F4C542' : '#B8860B'} />
         </mesh>
       ))}
-      {/* Icon */}
-      <Text position={[0, height / 2 - 0.9, 0.1]} fontSize={0.85} anchorX="center" anchorY="middle">
-        {video.icon}
-      </Text>
       {/* Title */}
-      <Text position={[0, 0.35, 0.1]} fontSize={0.32} color="#FFFFFF" anchorX="center" anchorY="middle"
+      <Text position={[0, 0, 0.1]} fontSize={0.5} color="#FFFFFF" anchorX="center" anchorY="middle"
         maxWidth={width - 0.6} textAlign="center">
         {video.title}
-      </Text>
-      {/* Subtitle */}
-      <Text position={[0, -0.55, 0.1]} fontSize={0.22} color="#E8E8E8" anchorX="center" anchorY="middle"
-        maxWidth={width - 0.6} textAlign="center">
-        {video.subtitle}
-      </Text>
-      {/* Duration */}
-      <Text position={[0, -height / 2 + 0.6, 0.1]} fontSize={0.24} color="#F4C542" anchorX="center" anchorY="middle">
-        ⏱ {video.duration}
       </Text>
     </group>
   );

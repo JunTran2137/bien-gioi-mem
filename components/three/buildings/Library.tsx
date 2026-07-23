@@ -80,16 +80,18 @@ export function Library() {
         📚 THƯ VIỆN
       </Text>
 
-      {/* Door */}
-      <RoundedBox args={[1.6, 2.4, 0.15]} radius={0.2} smoothness={2} position={[0, 1.8, 3.55]}>
+      {/* Door — raised so its base clears the plinth top (y=0.6) and nudged off
+          the facade so it doesn't z-fight with the wall. */}
+      <RoundedBox args={[1.6, 2.4, 0.15]} radius={0.2} smoothness={2} position={[0, 1.9, 3.6]}>
         <meshStandardMaterial color="#5C3D2A" roughness={0.6} />
       </RoundedBox>
 
-      {/* Steps */}
-      <RoundedBox args={[3, 0.2, 1]} radius={0.05} smoothness={3} position={[0, 0.7, 4]}>
+      {/* Steps — raised to rise above the plinth top instead of sitting flush
+          (which caused flicker). */}
+      <RoundedBox args={[3, 0.35, 1]} radius={0.06} smoothness={3} position={[0, 0.8, 4]}>
         <meshStandardMaterial color="#E8E0D0" roughness={0.9} />
       </RoundedBox>
-      <RoundedBox args={[3.4, 0.2, 1.2]} radius={0.05} smoothness={3} position={[0, 0.5, 4.5]}>
+      <RoundedBox args={[3.4, 0.35, 1.2]} radius={0.06} smoothness={3} position={[0, 0.55, 4.5]}>
         <meshStandardMaterial color="#D8CFBE" roughness={0.9} />
       </RoundedBox>
     </Hotspot>

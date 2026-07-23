@@ -52,3 +52,37 @@ export async function POST(req: Request) {
   const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(id) as Group;
   return NextResponse.json({ ok: true, group: { ...g, capacity: MAX_MEMBERS_PER_GROUP, full: false, members: [] } });
 }
+
+export async function PATCH(req: Request) {
+  const session = await auth();
+  if (!session?.user?.uid) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+  let body: { groupId?: string; name?: string } = {};
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+  }
+  const groupId = (body.groupId || '').trim();
+  const name = (body.name || '').trim().slice(0, 50);
+  if (!groupId) return NextResponse.json({ error: 'group_required' }, { status: 400 });
+  if (!name) return NextResponse.json({ error: 'name_required' }, { status: 400 });
+
+  const db = getDb();
+  const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(groupId) as Group | undefined;
+  if (!group) return NextResponse.json({ error: 'not_found', message: 'Nhóm không tồn tại' }, { status: 404 });
+
+  // Only a member of the group may rename it.
+  const me = db.prepare('SELECT group_id FROM users WHERE uid = ?').get(session.user.uid) as { group_id: string | null } | undefined;
+  if (!me || me.group_id !== groupId) {
+    return NextResponse.json({ error: 'forbidden', message: 'Chỉ thành viên của nhóm mới được đổi tên' }, { status: 403 });
+  }
+
+  const clash = db.prepare('SELECT id FROM groups WHERE name = ? AND id != ?').get(name, groupId);
+  if (clash) return NextResponse.json({ error: 'name_taken', message: 'Tên nhóm đã tồn tại' }, { status: 400 });
+
+  db.prepare('UPDATE groups SET name = ? WHERE id = ?').run(name, groupId);
+  const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(groupId) as Group;
+  return NextResponse.json({ ok: true, group: { ...g, capacity: MAX_MEMBERS_PER_GROUP, full: g.member_count >= MAX_MEMBERS_PER_GROUP, members: [] } });
+}

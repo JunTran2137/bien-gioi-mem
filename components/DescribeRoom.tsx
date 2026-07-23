@@ -42,7 +42,7 @@ export function DescribeRoom() {
       const res = await fetch('/api/describe/session', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.roomCode) throw new Error(data?.error || 'Không tạo được phòng');
-      router.push(`/game/describe?room=${data.roomCode}&host=1`);
+      router.push(`/game?play=describe&room=${data.roomCode}&host=1`);
     } catch (e: any) {
       toast({ title: 'Không tạo được phòng', description: String(e?.message || e), variant: 'danger' });
       setCreating(false);
@@ -110,11 +110,11 @@ function RoleGate({ creating, onHost }: { creating: boolean; onHost: () => void 
         <div className="w-full max-w-lg bg-surface rounded-2xl border border-border shadow-xl p-8 space-y-5">
           <h2 className="font-display text-2xl text-text">Luật chơi — Luận Giải</h2>
           <ol className="space-y-3 text-sm text-text list-decimal list-inside">
-            <li><span className="font-semibold">Chuẩn bị (5 phút):</span> Mỗi nhóm được phân ngẫu nhiên 1 người viết. Người đó chọn 3 thẻ vật lý và viết 3 mô tả gợi ý — không được nói thẳng tên thẻ.</li>
-            <li><span className="font-semibold">Giơ thẻ:</span> Khi mô tả được hiện, các nhóm khác cầm thẻ mà mình nghĩ là đúng giơ trước camera. Camera tự đọc mã ArUco.</li>
-            <li><span className="font-semibold">Đoán đúng:</span> Nhóm đoán đúng +100 điểm. Nhóm viết mô tả bị trừ − 10 điểm cho mỗi nhóm đoán đúng (mô tả dễ quá thì thiệt!).</li>
-            <li><span className="font-semibold">Phản đối:</span> Sau khi đáp án được công bố, các nhóm có thể Đồng ý hoặc Phản đối. Nếu có phản đối, quản trò mở vòng phản biện 30 giây.</li>
-            <li><span className="font-semibold">Bỏ phiếu:</span> Sau phản biện, tất cả bỏ phiếu chọn thẻ nào đúng. Thẻ được vote nhiều nhất là đáp án chính thức.</li>
+            <li><span className="font-semibold">Chuẩn bị (5 phút):</span> Mỗi nhóm được phân ngẫu nhiên 1 người viết. Người viết sẽ chọn ngẫu nhiên 3 thẻ trong bộ 16 thẻ. Với mỗi thẻ, người viết chuẩn bị 1 câu mô tả gợi ý.</li>
+            <li><span className="font-semibold">Giơ thẻ:</span> Đến lượt, hệ thống sẽ hiển thị câu mô tả. Các nhóm còn lại đọc mô tả và giơ thẻ mà mình cho là đáp án đúng trước camera. Sau khi tất cả đã giơ thẻ, ban tổ chức sẽ công bố đáp án.</li>
+            <li><span className="font-semibold">Đoán đúng:</span> Nhóm đoán đúng +100 điểm. Nhóm viết mô tả bị trừ -10 điểm cho mỗi nhóm đoán đúng.</li>
+            <li><span className="font-semibold">Phản đối:</span> Sau khi đáp án được công bố, các nhóm có thể chọn Đồng ý hoặc Phản đối. Nếu có nhóm phản đối thì sẽ bắt đầu vòng phản biện trong 30 giây.</li>
+            <li><span className="font-semibold">Bỏ phiếu:</span> Sau khi phản biện, tất cả người chơi bỏ phiếu chọn thẻ nào đúng. Thẻ nhận được nhiều phiếu nhất sẽ trở thành đáp án chính thức và điểm số sẽ được tính theo kết quả đó.</li>
           </ol>
           <div className="flex gap-3 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => setShowRules(false)}>Quay lại</Button>
@@ -148,7 +148,7 @@ function RoleGate({ creating, onHost }: { creating: boolean; onHost: () => void 
             placeholder="Nhập mã phòng"
             className="flex-1 px-3 py-2 rounded-xl border border-border bg-bg font-mono tracking-widest uppercase"
           />
-          <Button variant="secondary" onClick={() => code.trim() && router.push(`/game/describe?room=${code.trim()}`)}>Vào</Button>
+          <Button variant="secondary" onClick={() => code.trim() && router.push(`/game?play=describe&room=${code.trim()}`)}>Vào</Button>
         </div>
       </div>
     </div>
@@ -202,7 +202,7 @@ function Lobby({ g, groups }: { g: any; groups: any[] }) {
       {myGroupMissingCam && (
         <div className="rounded-xl border border-accent/50 bg-accent/10 p-4 text-sm space-y-1">
           <p className="font-semibold text-accent flex items-center gap-1"><Camera size={15} /> Nhóm bạn chưa kết nối camera!</p>
-          <p className="text-muted">Mở link sau trên điện thoại và đăng nhập để kết nối:</p>
+          <p className="text-muted">Mở link sau để kết nối:</p>
           <a href={cameraUrl} target="_blank" rel="noopener noreferrer"
             className="font-mono font-medium text-primary underline break-all">{cameraUrl}</a>
         </div>
@@ -215,17 +215,13 @@ function Lobby({ g, groups }: { g: any; groups: any[] }) {
         </div>
       )}
 
-      {/* Host: list groups without camera */}
-      {(g.isHostMe || g.isHost) && missingCamGroups.length > 0 && (
-        <div className="rounded-xl border border-accent/50 bg-accent/10 p-4 text-sm">
-          <p className="font-semibold text-accent flex items-center gap-1"><Camera size={15} /> {missingCamGroups.length} nhóm chưa kết nối camera</p>
-        </div>
-      )}
-
-      {(!g.isHostMe && !g.isHost) && (
-        <div className="rounded-xl bg-primary-soft p-4 text-sm text-text space-y-2">
-          <p className="font-semibold flex items-center gap-1"><Camera size={15} /> Chuẩn bị camera</p>
-          <p className="text-muted">Mỗi nhóm mở link sau trên 1 điện thoại và chọn nhóm mình để giơ thẻ khi đoán:</p>
+      {/* Host: list groups without camera + one shared link to hand out */}
+      {(g.isHostMe || g.isHost) && (
+        <div className="rounded-xl border border-accent/50 bg-accent/10 p-4 text-sm space-y-2">
+          {missingCamGroups.length > 0 && (
+            <p className="font-semibold text-accent flex items-center gap-1"><Camera size={15} /> {missingCamGroups.length} nhóm chưa kết nối camera</p>
+          )}
+          <p className="text-muted">Mỗi nhóm mở link sau để giơ thẻ khi đoán:</p>
           <a href={cameraUrl} target="_blank" rel="noopener noreferrer"
             className="font-mono text-primary underline break-all">{cameraUrl}</a>
         </div>
@@ -254,6 +250,12 @@ function Prepare({ g, groups }: { g: any; groups: any[] }) {
 
       {g.amIScribe ? (
         <ScribeForm g={g} perGroup={perGroup} />
+      ) : g.isHostMe ? (
+        <div className="bg-surface rounded-2xl border border-border p-6 text-center space-y-2">
+          <Crown className="mx-auto text-accent" size={28} />
+          <p className="text-text font-semibold">Bạn là quản trò — theo dõi tiến độ bên dưới</p>
+          <p className="text-muted text-sm">Các nhóm đang thảo luận và chọn thẻ để mô tả.</p>
+        </div>
       ) : (
         <div className="bg-surface rounded-2xl border border-border p-6 text-center space-y-2">
           <Sparkles className="mx-auto text-primary" />
@@ -278,7 +280,7 @@ function Prepare({ g, groups }: { g: any; groups: any[] }) {
       </div>
 
       {(g.isHostMe || g.isHost) && (
-        <Button variant="outline" className="w-full" onClick={g.endPrepare}>Kết thúc chuẩn bị sớm →</Button>
+        <Button className="w-full bg-primary hover:bg-primary/90 text-white" onClick={g.endPrepare}>Kết thúc chuẩn bị sớm →</Button>
       )}
     </div>
   );
@@ -374,10 +376,21 @@ function CameraGrid({ g, groups }: { g: any; groups: any[] }) {
   const bmpCtxRefs = useRef<Record<string, ImageBitmapRenderingContext | false | null>>({});
   // Per-group decode guard: skip incoming frame if previous createImageBitmap still pending
   const decodingRef = useRef<Record<string, boolean>>({});
+  // Delivered-FPS meter: counts frames drawn per group, sampled once a second.
+  const fpsCountRef = useRef<Record<string, number>>({});
+  const [fps, setFps] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const id = setInterval(() => {
+      setFps({ ...fpsCountRef.current });
+      fpsCountRef.current = {};
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
   useEffect(() => {
     const socket = getSocket();
     const onFrame = (d: { groupId: string; jpeg: ArrayBuffer | string }) => {
       if (!(d.jpeg instanceof ArrayBuffer)) return;
+      fpsCountRef.current[d.groupId] = (fpsCountRef.current[d.groupId] || 0) + 1;
       // Drop frame if still decoding previous one for this group (prevent queue buildup)
       if (decodingRef.current[d.groupId]) return;
       const canvas = canvasRefs.current[d.groupId];
@@ -432,7 +445,7 @@ function CameraGrid({ g, groups }: { g: any; groups: any[] }) {
   }, []);
   return (
     <div>
-      <p className="text-sm font-semibold text-text mb-2 flex items-center gap-1"><Camera size={15} /> Các nhóm giơ thẻ đoán</p>
+      <p className="text-sm font-semibold text-white mb-2 flex items-center gap-1"><Camera size={15} /> Các nhóm giơ thẻ đoán</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
         {ids.map(gid => {
           const cam = g.cameras[gid];
@@ -453,7 +466,10 @@ function CameraGrid({ g, groups }: { g: any; groups: any[] }) {
                 </div>
               )}
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1">
-                <div className="text-white text-xs font-semibold truncate">{g.groupNameMap[gid] || 'Nhóm'}</div>
+                <div className="text-white text-xs font-semibold truncate flex items-center justify-between gap-1">
+                  <span className="truncate">{g.groupNameMap[gid] || 'Nhóm'}</span>
+                  {cam?.connected && <span className="font-mono text-[10px] text-emerald-300 shrink-0">{fps[gid] || 0} fps</span>}
+                </div>
                 {guess && (
                   <div className={cn('text-[11px] truncate', correct === true ? 'text-emerald-300' : correct === false ? 'text-red-300' : 'text-white/80')}>
                     → {guess.cardName}

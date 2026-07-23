@@ -384,7 +384,10 @@ function Crown({
             <cylinderGeometry args={[minTop * 0.55, minTop * 0.6, 0.4, 8]} />
             <meshStandardMaterial color={trim} roughness={0.6} />
           </mesh>
-          <mesh position={[0, topY + minTop * 0.65 + 0.4, 0]} castShadow>
+          {/* Cone half-height is minTop*0.5, drum top is at topY+0.4, so the cone
+              centre must sit at topY+0.4+minTop*0.5 for its base to rest on the
+              drum. Pull down 0.05 for a clean overlap (was minTop*0.65 → floated). */}
+          <mesh position={[0, topY + minTop * 0.5 + 0.35, 0]} castShadow>
             <coneGeometry args={[minTop * 0.5, minTop * 1.0, 6]} />
             <meshStandardMaterial color={roofColor} roughness={0.55} />
           </mesh>

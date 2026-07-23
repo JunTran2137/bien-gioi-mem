@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/toast';
-import { Users, Plus, CheckCircle2 } from 'lucide-react';
+import { Users, Plus, CheckCircle2, Pencil } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -33,6 +33,8 @@ export function GroupSelector({ open, currentGroupId, onConfirmed, onClose }: Pr
   const [selectedId, setSelectedId] = useState<string | null>(currentGroupId);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [renameName, setRenameName] = useState('');
+  const [renaming, setRenaming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -58,6 +60,13 @@ export function GroupSelector({ open, currentGroupId, onConfirmed, onClose }: Pr
     setSelectedId(currentGroupId);
   }, [currentGroupId, open]);
 
+  // Keep the rename field seeded with the current group's name.
+  useEffect(() => {
+    if (!currentGroupId) { setRenameName(''); return; }
+    const g = groups.find(x => x.id === currentGroupId);
+    if (g) setRenameName(g.name);
+  }, [groups, currentGroupId]);
+
   const handleCreate = async () => {
     if (!newName.trim()) return;
     setCreating(true);
@@ -78,6 +87,27 @@ export function GroupSelector({ open, currentGroupId, onConfirmed, onClose }: Pr
       toast({ title: `Đã tạo nhóm ${data.group.name}`, variant: 'success' });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleRename = async () => {
+    if (!currentGroupId || !renameName.trim()) return;
+    setRenaming(true);
+    try {
+      const res = await fetch('/api/groups', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ groupId: currentGroupId, name: renameName.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: 'Không thể đổi tên', description: data.message || data.error, variant: 'error' });
+        return;
+      }
+      setGroups(prev => prev.map(g => g.id === currentGroupId ? { ...g, name: data.group.name } : g));
+      toast({ title: `Đã đổi tên thành ${data.group.name}`, variant: 'success' });
+    } finally {
+      setRenaming(false);
     }
   };
 
@@ -108,9 +138,6 @@ export function GroupSelector({ open, currentGroupId, onConfirmed, onClose }: Pr
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Bạn đang ở nhóm nào?</DialogTitle>
-          <DialogDescription>
-            Chọn nhóm để cùng thi đấu và tích điểm. Tối đa {maxGroups} nhóm, {maxMembers} thành viên mỗi nhóm.
-          </DialogDescription>
         </DialogHeader>
 
         {loading ? (
@@ -192,6 +219,23 @@ export function GroupSelector({ open, currentGroupId, onConfirmed, onClose }: Pr
                 <Button onClick={handleCreate} disabled={!newName.trim() || creating} variant="outline">
                   <Plus className="h-4 w-4" />
                   Tạo nhóm
+                </Button>
+              </div>
+            )}
+
+            {currentGroupId && (
+              <div className="border-t border-border pt-4 flex gap-2">
+                <Input
+                  placeholder="Đổi tên nhóm của bạn..."
+                  value={renameName}
+                  onChange={e => setRenameName(e.target.value)}
+                  maxLength={50}
+                  disabled={renaming}
+                  onKeyDown={e => e.key === 'Enter' && handleRename()}
+                />
+                <Button onClick={handleRename} disabled={!renameName.trim() || renaming} variant="outline">
+                  <Pencil className="h-4 w-4" />
+                  Đổi tên
                 </Button>
               </div>
             )}

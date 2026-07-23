@@ -143,14 +143,14 @@ export function useDescribeGame() {
         if (res?.ok) {
           // Only block imposters when both values are known non-null strings.
           if (uid && res.hostUid && res.hostUid !== uid) {
-            router.replace(`/game/describe?room=${roomCode}`);
+            router.replace(`/game?play=describe&room=${roomCode}`);
             return;
           }
           setHostUid(res.hostUid);
           setState(res.state);
           setPlayers(res.players || []);
         } else {
-          router.replace(`/game/describe?room=${roomCode}`);
+          router.replace(`/game?play=describe&room=${roomCode}`);
         }
       });
     } else doJoin();

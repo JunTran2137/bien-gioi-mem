@@ -89,12 +89,12 @@ export function Tower() {
       {/* Light rays from crystal */}
       <pointLight position={[0, 14.5, 0]} color={hex.gold} intensity={1.2} distance={20} decay={2} />
 
-      {/* Sign */}
-      <RoundedBox args={[5, 0.9, 0.15]} radius={0.15} smoothness={2} position={[0, 3, 3.85]}>
+      {/* Sign — raised higher onto tier 2 so it reads more prominently. */}
+      <RoundedBox args={[5, 0.9, 0.15]} radius={0.15} smoothness={2} position={[0, 3.5, 3.35]}>
         <meshStandardMaterial color={hex.gold} emissive={hex.gold} emissiveIntensity={0.4} />
       </RoundedBox>
-      <Text position={[0, 3, 3.96]} fontSize={0.4} color="#fff" anchorX="center" anchorY="middle" bold>
-        🏆 VINH DANH
+      <Text position={[0, 3.5, 3.46]} fontSize={0.4} color="#fff" anchorX="center" anchorY="middle" bold>
+        🏆 ĐÀI VINH DANH
       </Text>
 
       {/* Decorative trophies on tier 1 corners */}

@@ -262,24 +262,25 @@ export function TownHallScene() {
         </group>
       ))}
 
-      {/* Grand wall clock above the entrance (front wall, behind the viewer) */}
-      <group position={[0, 8.2, halfD - 0.15]} rotation-y={Math.PI}>
-        <mesh rotation-x={Math.PI / 2}><cylinderGeometry args={[1.5, 1.5, 0.2, 36]} /><meshStandardMaterial color={hex.gold} metalness={0.75} roughness={0.28} /></mesh>
-        <mesh position={[0, 0, 0.11]} rotation-x={Math.PI / 2}><cylinderGeometry args={[1.25, 1.25, 0.06, 36]} /><meshStandardMaterial color="#FBF7EC" roughness={0.5} /></mesh>
-        {/* hour ticks */}
-        {Array.from({ length: 12 }).map((_, h) => {
-          const a = (h / 12) * Math.PI * 2;
-          return (
-            <mesh key={h} position={[Math.sin(a) * 1.05, Math.cos(a) * 1.05, 0.15]}>
-              <boxGeometry args={[0.08, 0.18, 0.04]} />
-              <meshStandardMaterial color={hex.text} />
-            </mesh>
-          );
-        })}
-        {/* hands */}
-        <mesh position={[0, 0.25, 0.18]} rotation-z={0.4}><boxGeometry args={[0.09, 0.8, 0.04]} /><meshStandardMaterial color={hex.text} /></mesh>
-        <mesh position={[0.25, 0.05, 0.18]} rotation-z={-1.1}><boxGeometry args={[0.07, 1.05, 0.04]} /><meshStandardMaterial color={RED} /></mesh>
-        <mesh position={[0, 0, 0.2]}><sphereGeometry args={[0.1, 12, 10]} /><meshStandardMaterial color={hex.gold} metalness={0.9} roughness={0.2} /></mesh>
+      {/* Grand entrance — double doors on the front wall (behind the viewer),
+          where the wall clock used to hang. Gives the hall a real way in. */}
+      <group position={[0, 0, halfD - 0.18]} rotation-y={Math.PI}>
+        {/* stone frame */}
+        <mesh position={[0, 3.1, 0]}><boxGeometry args={[5.2, 6.4, 0.4]} /><meshStandardMaterial color="#6B4A2E" roughness={0.6} /></mesh>
+        {/* two door leaves */}
+        {([-1.15, 1.15] as number[]).map((lx, j) => (
+          <group key={`ent-${j}`} position={[lx, 0, 0]}>
+            <mesh position={[0, 2.9, 0.22]}><boxGeometry args={[2.1, 5.6, 0.12]} /><meshStandardMaterial color="#8B5A2A" roughness={0.5} /></mesh>
+            {/* panel insets */}
+            <mesh position={[0, 4.1, 0.29]}><boxGeometry args={[1.5, 1.9, 0.04]} /><meshStandardMaterial color="#7A4D24" roughness={0.6} /></mesh>
+            <mesh position={[0, 1.7, 0.29]}><boxGeometry args={[1.5, 1.9, 0.04]} /><meshStandardMaterial color="#7A4D24" roughness={0.6} /></mesh>
+            {/* handle near the centre gap */}
+            <mesh position={[lx < 0 ? 0.85 : -0.85, 2.8, 0.32]}><sphereGeometry args={[0.13, 12, 10]} /><meshStandardMaterial color={hex.gold} metalness={0.9} roughness={0.2} /></mesh>
+          </group>
+        ))}
+        {/* lintel sign */}
+        <mesh position={[0, 6.55, 0.14]}><boxGeometry args={[5.0, 0.7, 0.14]} /><meshStandardMaterial color={hex.primary} roughness={0.4} /></mesh>
+        <Text position={[0, 6.55, 0.22]} fontSize={0.3} color="#fff" anchorX="center" anchorY="middle" bold>LỐI RA</Text>
       </group>
 
       {/* Hanging lanterns down the central aisle */}

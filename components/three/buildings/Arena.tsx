@@ -11,11 +11,16 @@ const cfg = buildings.arena;
 export function Arena() {
   return (
     <Hotspot position={cfg.position as any} label={cfg.label} sub={cfg.sub} route={cfg.route} hitbox={[14, 12, 14]}>
-      {/* Ground plinth */}
-      <RoundedBox args={[14, 0.6, 14]} radius={0.4} smoothness={2} position={[0, 0.3, 0]} receiveShadow>
+      {/* Ground plinth — a nearly-flush thin pad so the stadium reads as sitting
+          directly on the ground, not raised on a tall base. */}
+      <RoundedBox args={[14, 0.1, 14]} radius={0.1} smoothness={2} position={[0, 0.05, 0]} receiveShadow>
         <meshStandardMaterial color="#A8D5A8" roughness={0.95} />
       </RoundedBox>
 
+      {/* Everything above the plinth is lifted by the plinth height (0.1) so the
+          stadium sits ON the base like every other landmark — previously the
+          plinth cut through the arena's lower ring instead of supporting it. */}
+      <group position={[0, 0.1, 0]}>
       {/* Outer ring base — cylinder */}
       <mesh castShadow receiveShadow position={[0, 1.5, 0]}>
         <cylinderGeometry args={[6.5, 7, 3, 20]} />
@@ -100,6 +105,7 @@ export function Arena() {
       <Text position={[0, 9.0, 0.1]} fontSize={0.45} color="#fff" anchorX="center" anchorY="middle" bold>
         ⚔️ ĐẤU TRƯỜNG
       </Text>
+      </group>
     </Hotspot>
   );
 }

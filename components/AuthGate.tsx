@@ -18,7 +18,7 @@ export function AuthGate() {
       greetedRef.current = true;
       toast({
         title: `Chào mừng trở lại, ${user.name?.split(' ').slice(-1)[0] || ''}!`,
-        description: user.groupName ? `Nhóm ${user.groupName}` : undefined,
+        description: user.groupName || undefined,
         variant: 'success'
       });
     } else if (!user.groupId && !promptedRef.current) {

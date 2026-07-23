@@ -27,6 +27,7 @@ const ROOM_BOUNDS: Record<string, RoomBounds> = {
   // orbit/zoom out to reveal the exterior void.
   '/game':        { center: [B.arena.position[0], B.arena.position[2]],       halfX: 13, halfZ: 13, minDist: 4, maxDist: 11, maxRadius: 13, maxPolar: 0.66 },
   '/game/quiz':   { center: [B.arena.position[0], B.arena.position[2]],       halfX: 13, halfZ: 13, minDist: 4, maxDist: 11, maxRadius: 13, maxPolar: 0.66 },
+  '/game/describe': { center: [B.arena.position[0], B.arena.position[2]],     halfX: 13, halfZ: 13, minDist: 4, maxDist: 11, maxRadius: 13, maxPolar: 0.66 },
   '/game/debate': { center: [B.arena.position[0], B.arena.position[2]],       halfX: 18, halfZ: 18, minDist: 4, maxDist: 32 },
   '/townhall':    { center: [B.townhall.position[0], B.townhall.position[2]], halfX: 14, halfZ: 12, minDist: 4, maxDist: 28 },
   '/cinema':      { center: [B.cinema.position[0],   B.cinema.position[2]],   halfX: 13, halfZ: 9, minDist: 3, maxDist: 16, maxPolar: 0.72, rectClamp: true }

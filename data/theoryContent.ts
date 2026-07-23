@@ -15,125 +15,105 @@ export const theoryContent: TheorySection[] = [
   {
     id: 'sec-1',
     number: '01',
-    title: 'Khái niệm "Biên giới mềm"',
-    intro: 'Biên giới quốc gia không còn chỉ là đường vẽ trên bản đồ.',
+    title: 'Bối cảnh ra đời của chiến lược "biên giới mềm"',
+    intro: 'Khi chủ nghĩa thực dân cũ sụp đổ, cường quốc tư bản tìm ra vũ khí mới.',
     paragraphs: [
-      'Trong thế kỷ XXI, bên cạnh biên giới cứng truyền thống (lãnh thổ, vùng trời, vùng biển), các quốc gia còn phải đối mặt với một loại biên giới mới — biên giới mềm. Đó là ranh giới vô hình về kinh tế, công nghệ, văn hóa và pháp lý, nơi quyền lực không được thực thi bằng vũ lực mà bằng dòng vốn, dữ liệu, tiêu chuẩn và ảnh hưởng văn hóa.',
-      'Biên giới mềm có bốn chiều cạnh chính: (1) Kinh tế — chuỗi cung ứng, FDI, dòng vốn; (2) Công nghệ — chuẩn kỹ thuật, hạ tầng số, AI; (3) Văn hóa — phim ảnh, mạng xã hội, lối sống; (4) Pháp lý — luật chơi quốc tế, tiêu chuẩn ESG, luật dữ liệu.'
+      `Vào nửa cuối thế kỷ XX, thế giới chứng kiến sự sụp đổ hoàn toàn của chủ nghĩa thực dân cũ và sự suy yếu của chủ nghĩa thực dân mới. Trước tình hình đó, các cường quốc tư bản không còn có thể duy trì sự thống trị thông qua việc chiếm hữu lãnh thổ trực tiếp như trước.
+      
+Để tiếp tục tranh giành phạm vi ảnh hưởng và bảo vệ lợi ích của các tập đoàn độc quyền, các quốc gia này đã chuyển sang sử dụng những hình thức cạnh tranh và thống trị mới, trong đó nổi bật là việc thực hiện "chiến lược biên giới mềm".`
     ],
-    callout: {
-      kind: 'quote',
-      text: 'Biên giới mềm không thay thế biên giới cứng — nó là lớp mới chồng lên, phức tạp hơn, khó thấy hơn, và đôi khi nguy hiểm hơn.'
-    },
     zDepth: 'near'
   },
   {
     id: 'sec-2',
     number: '02',
-    title: 'Hội nhập kinh tế quốc tế',
-    intro: 'Từ toàn cầu hóa 1.0 đến 3.0 — thế giới ngày càng phụ thuộc lẫn nhau.',
+    title: 'Bản chất của "biên giới mềm"',
+    intro: 'Kinh tế thay thế súng đạn — nhưng bản chất thống trị không thay đổi.',
     paragraphs: [
-      'Toàn cầu hóa 3.0 (Thomas Friedman) lấy cá nhân làm trung tâm: nhờ Internet, AI và các nền tảng số, một kỹ sư ở Hà Nội có thể cạnh tranh trực tiếp với kỹ sư ở Silicon Valley. Chuỗi giá trị toàn cầu (GVC) phân tán sản xuất qua hàng chục quốc gia — một chiếc iPhone hội tụ linh kiện từ 43 nước.',
-      'Lý thuyết Phụ thuộc lẫn nhau (Interdependence) của Robert Keohane và Joseph Nye chỉ ra: trong thế giới hiện đại, không quốc gia nào có thể đứng một mình. Phụ thuộc lẫn nhau vừa mở ra cơ hội (thương mại, công nghệ, tri thức) vừa tạo điểm yếu (gián đoạn chuỗi cung ứng, áp lực từ đối tác lớn).',
-      'Các định chế đa phương như WTO, IMF, WB, G20, APEC đặt ra luật chơi chung. Bên cạnh đó, xu hướng khu vực hóa cũng mạnh mẽ: ASEAN, EU, RCEP, USMCA là các khối kinh tế lớn định hình thương mại toàn cầu.'
-    ],
+      `Bản chất của chiến lược này là việc các cường quốc tư bản ra sức bành trướng "biên giới kinh tế" của mình sao cho rộng hơn rất nhiều so với biên giới địa lý (biên giới quốc gia thông thường).
+
+Thay vì sử dụng sức mạnh quân sự để xâm chiếm đất đai, họ sử dụng sức mạnh kinh tế và công nghệ để xác lập quyền lực của mình trên phạm vi toàn cầu, biến các quốc gia khác thành "sân sau" hoặc khu vực chịu ảnh hưởng của mình.`    ],
     callout: {
-      kind: 'didyouknow',
-      text: 'Một chiếc iPhone hiện đại có linh kiện từ hơn 40 quốc gia — biểu tượng kinh điển của chuỗi giá trị toàn cầu.'
+      kind: 'quote',
+      text: '"Biên giới mềm" không phải là ranh giới trên bản đồ địa lý mà là ranh giới của sự ảnh hưởng kinh tế, tài chính và công nghệ.'
     },
     zDepth: 'mid'
   },
   {
     id: 'sec-3',
     number: '03',
-    title: 'Việt Nam trong bức tranh hội nhập',
-    intro: 'Từ Đổi Mới 1986 đến RCEP 2022 — gần 4 thập kỷ mở cửa.',
+    title: 'Mục tiêu của chiến lược "biên giới mềm"',
+    intro: 'Từ lệ thuộc kinh tế đến chi phối chính trị — đó là lộ trình đã định.',
     paragraphs: [
-      'Sau Đại hội VI (1986), Việt Nam chuyển từ kinh tế kế hoạch hóa sang kinh tế thị trường định hướng XHCN. Mỗi cột mốc hội nhập đều mở ra một cánh cửa mới: ASEAN 1995, BTA Việt-Mỹ 2001, WTO 2007, AEC 2015, CPTPP 2019, EVFTA 2020, RCEP 2022.',
-      'Thành tựu là không thể phủ nhận: GDP tăng hơn 40 lần kể từ 1986, FDI duy trì 20-25 tỷ USD/năm, kim ngạch xuất khẩu vượt 370 tỷ USD (2023), Việt Nam lọt top 20 nền kinh tế xuất khẩu lớn nhất thế giới.',
-      'Song thực trạng cho thấy nhiều điểm yếu: phụ thuộc nặng vào nguyên liệu và linh kiện nhập khẩu (đặc biệt từ Trung Quốc), công nghệ lõi vẫn phải mua, doanh nghiệp nội địa chủ yếu nằm ở khâu gia công lắp ráp — giá trị gia tăng thấp.'
-    ],
-    timeline: [
-      { year: '1986', label: 'Đổi Mới', detail: 'Đại hội VI khởi xướng đường lối Đổi Mới' },
-      { year: '1995', label: 'ASEAN', detail: 'Thành viên thứ 7 của ASEAN' },
-      { year: '2001', label: 'BTA Mỹ', detail: 'Hiệp định Thương mại song phương VN-Mỹ' },
-      { year: '2007', label: 'WTO', detail: 'Thành viên thứ 150 của Tổ chức Thương mại Thế giới' },
-      { year: '2015', label: 'AEC', detail: 'Cộng đồng Kinh tế ASEAN ra đời' },
-      { year: '2019', label: 'CPTPP', detail: 'Hiệp định Đối tác Toàn diện và Tiến bộ Xuyên Thái Bình Dương' },
-      { year: '2020', label: 'EVFTA', detail: 'Hiệp định thương mại với Liên minh Châu Âu' },
-      { year: '2022', label: 'RCEP', detail: 'Hiệp định Đối tác Kinh tế Toàn diện Khu vực' },
-      { year: '2023', label: 'CSP Mỹ', detail: 'Đối tác Chiến lược Toàn diện với Hoa Kỳ' }
-    ],
-    fta: [
-      { name: 'AFTA', year: '1996', partner: 'ASEAN' },
-      { name: 'WTO', year: '2007', partner: 'Toàn cầu' },
-      { name: 'CPTPP', year: '2019', partner: '10 nước Thái Bình Dương' },
-      { name: 'EVFTA', year: '2020', partner: 'EU 27 nước' },
-      { name: 'UKVFTA', year: '2021', partner: 'Vương quốc Anh' },
-      { name: 'RCEP', year: '2022', partner: 'ASEAN+5' }
-    ],
+      `Mục tiêu cuối cùng của chiến lược "biên giới mềm" là:
+- Chi phối chính trị: Đưa các nước kém phát triển đi từ sự lệ thuộc về kinh tế đến sự lệ thuộc về chính trị vào các cường quốc tư bản.
+- Bảo vệ lợi ích độc quyền: Đứng sau các hoạt động bành trướng này luôn là vai trò và lợi ích của các tập đoàn tư bản độc quyền.`    ],
+    callout: {
+      kind: 'didyouknow',
+      text: 'Mục tiêu của chiến lược biên giới mềm gồm hai trụ cột: chi phối chính trị và bảo vệ lợi ích độc quyền của các tập đoàn tư bản.'
+    },
     zDepth: 'front'
   },
   {
     id: 'sec-4',
     number: '04',
-    title: 'Thách thức và Nghịch lý',
-    intro: 'Hội nhập không phải con đường một chiều — luôn có những cái giá phải trả.',
+    title: 'Cơ chế và cách thức thực hiện',
+    intro: 'Ba tầng lệ thuộc: vốn → công nghệ → chính trị.',
     paragraphs: [
-      'Bốn thách thức lớn nhất mà Việt Nam đang đối mặt phản ánh đầy đủ bản chất hai mặt của hội nhập sâu.'
+      `Chiến lược "biên giới mềm" được vận hành thông qua việc tạo ra sự ràng buộc chặt chẽ từ phía các nước kém phát triển đối với các cường quốc tư bản:
+1. Lệ thuộc về vốn
+2. Lệ thuộc về công nghệ
+3. Lệ thuộc về chính trị`
     ],
     bullets: [
       {
-        title: '4.1 Bẫy hội nhập',
-        body: 'Mở cửa quá nhanh khiến doanh nghiệp nội địa không kịp thích ứng. Nhiều ngành bị "FDI chèn ép" ngay trên sân nhà — bán lẻ, điện tử tiêu dùng, ô tô đều có dấu hiệu này.'
+        title: 'Lệ thuộc về vốn',
+        body: 'Thông qua việc xuất khẩu tư bản, viện trợ kinh tế, hoặc các khoản vay kèm theo điều kiện, các cường quốc khiến các nước kém phát triển rơi vào tình trạng lệ thuộc về tài chính.'
       },
       {
-        title: '4.2 Căng thẳng Mỹ-Trung',
-        body: 'Việt Nam ở vị trí địa chiến lược nhạy cảm. Vừa là đối tác lớn của TQ (nhập siêu hàng năm 50+ tỷ USD), vừa là đối tác chiến lược toàn diện của Mỹ. Phải đi dây tinh tế.'
+        title: 'Lệ thuộc về công nghệ',
+        body: 'Việc nắm giữ các bí mật công nghệ và quy trình sản xuất hiện đại cho phép các cường quốc chi phối nền sản xuất của các nước nhận đầu tư, buộc các nước này phải phụ thuộc vào trình độ kỹ thuật của họ.'
       },
       {
-        title: '4.3 Chủ quyền số',
-        body: 'Dữ liệu của gần 100 triệu người Việt nằm trên server Google, Meta, TikTok tại Singapore, Mỹ, Ireland. Quy định pháp lý VN khó với tới được.'
-      },
-      {
-        title: '4.4 Văn hóa bị xâm thực',
-        body: 'K-pop, K-drama, TikTok content, lối sống tiêu dùng phương Tây thâm nhập mạnh mẽ. Giới trẻ thuộc lời nhạc Hàn nhanh hơn ca dao Việt.'
+        title: 'Lệ thuộc về chính trị',
+        body: 'Từ sự lệ thuộc sâu sắc về kinh tế (vốn và công nghệ), các cường quốc tư bản dần đi đến việc chi phối và ràng buộc về mặt chính trị đối với các quốc gia này.'
       }
     ],
     callout: {
       kind: 'warning',
-      text: 'Hội nhập càng sâu, chủ quyền càng cần được định nghĩa lại — không chỉ là lãnh thổ, mà còn là quyền tự quyết kinh tế, công nghệ, văn hóa.'
+      text: 'Ba tầng lệ thuộc tạo thành chuỗi dây chuyền: một khi bị mắc vào tầng đầu (vốn), các nước kém phát triển rất khó thoát khỏi tầng tiếp theo (công nghệ → chính trị).'
     },
     zDepth: 'near'
   },
   {
     id: 'sec-5',
     number: '05',
-    title: 'Giải pháp — Hội nhập bằng bản lĩnh',
-    intro: 'Năm trụ cột chiến lược để Việt Nam vừa hội nhập tốt, vừa giữ vững độc lập, tự chủ.',
+    title: 'Vai trò của các tập đoàn độc quyền',
+    intro: 'Ai thực sự được hưởng lợi — và ai phải trả giá?',
     paragraphs: [
-      'Câu trả lời không nằm ở việc đóng cửa hay mở cửa toàn bộ — mà ở khả năng chọn lọc, nâng cao nội lực và xây dựng vị thế trong luật chơi quốc tế.'
-    ],
+      `Đứng đằng sau và hậu thuẫn cho các hoạt động xác lập "biên giới mềm" của các quốc gia tư bản luôn có vai trò quyết định của các tập đoàn tư bản độc quyền.
+
+Các tập đoàn này sử dụng sức mạnh nhà nước để dọn đường cho việc bành trướng biên giới kinh tế nhằm tìm kiếm nguồn nguyên liệu, thị trường tiêu thụ và nơi đầu tư có lợi nhất trên phạm vi toàn thế giới.`    ],
     bullets: [
       {
-        title: '5.1 Chiến lược "Tre Việt Nam"',
-        body: 'Gốc vững (độc lập, tự chủ), thân chắc (lợi ích quốc gia), cành lá uyển chuyển (đa phương hóa, đa dạng hóa). Không chọn phe, không liên minh, nhưng có lập trường rõ ràng.'
+        title: 'Lệ thuộc và mất tự chủ quốc gia',
+        body: 'Các nước kém phát triển dễ rơi vào tình trạng bị điều khiển về mặt chính sách và mất dần khả năng tự chủ kinh tế.'
       },
       {
-        title: '5.2 Tự chủ công nghệ',
-        body: 'Đầu tư R&D, đào tạo kỹ sư bán dẫn (Việt Nam đặt mục tiêu 50.000 kỹ sư đến 2030), phát triển AI nội địa, xây dựng hệ sinh thái số "Make in Vietnam".'
+        title: 'Trở thành "bãi thải công nghiệp"',
+        body: 'Các nước bị chi phối dễ trở thành nơi tiếp nhận công nghệ thấp và "bãi thải công nghiệp" của cường quốc.'
       },
       {
-        title: '5.3 Nâng cao nội lực doanh nghiệp',
-        body: 'Hỗ trợ doanh nghiệp nội địa tham gia chuỗi giá trị toàn cầu ở khâu cao hơn (thiết kế, thương hiệu, R&D) thay vì chỉ gia công.'
+        title: 'Cạn kiệt tài nguyên và hủy hoại môi trường',
+        body: 'Nguồn tài nguyên thiên nhiên bị cạn kiệt và môi trường bị hủy hoại ở mức độ cao do thiên hướng tập trung vào các ngành khai thác tài nguyên và sử dụng nhiều sức lao động giá trị thấp.'
       },
       {
-        title: '5.4 Bảo vệ và xuất khẩu văn hóa',
-        body: 'Phát triển tiếng Việt trên nền tảng số, đầu tư công nghiệp văn hóa (phim, âm nhạc, ẩm thực), xây dựng thương hiệu quốc gia Việt Nam trên thế giới.'
+        title: 'Gia tăng khoảng cách giàu nghèo và bất bình đẳng xã hội',
+        body: 'Sự phân cực giữa các quốc gia ngày càng cao; một nhóm nhỏ cường quốc giàu lên nhanh chóng trong khi các nước chậm phát triển vẫn chìm trong đói nghèo, kéo theo sự bất bình đẳng xã hội ngày càng sâu sắc giữa các quốc gia.'
       },
       {
-        title: '5.5 Thể chế pháp lý',
-        body: 'Hoàn thiện Luật An ninh mạng, Luật Bảo vệ Dữ liệu cá nhân, tham gia tích cực xây dựng luật chơi quốc tế (chuẩn ESG, thuế tối thiểu toàn cầu, AI Act).'
+        title: 'Xâm lăng văn hóa',
+        body: 'Đi đôi với hội nhập kinh tế và biên giới mềm là nguy cơ bản sắc dân tộc và văn hóa truyền thống bị xói mòn trước sự "xâm lăng" của văn hóa nước ngoài.'
       }
     ],
     zDepth: 'mid'
@@ -141,14 +121,19 @@ export const theoryContent: TheorySection[] = [
   {
     id: 'sec-6',
     number: '06',
-    title: 'Kết luận',
+    title: 'Hệ quả của "biên giới mềm"',
+    intro: 'Chiến tranh lạnh kết thúc — nhưng tranh giành "biên giới mềm" vẫn tiếp diễn.',
     paragraphs: [
-      'Biên giới mềm không phải kẻ thù của chủ quyền. Nó là một thực tế mới — đòi hỏi tư duy mới, thể chế mới và bản lĩnh mới.',
-      'Việt Nam đã chọn con đường hội nhập, và đường lùi đã đóng. Vấn đề không còn là "hội nhập hay không" mà là "hội nhập như thế nào" — bằng bản lĩnh, bằng nội lực, bằng trí tuệ — chứ không phải bằng phụ thuộc.'
-    ],
+      `Việc thực hiện chiến lược biên giới mềm của các cường quốc để lại những hệ lụy sâu sắc cho các quốc gia đang phát triển và các nước bị chi phối:
+- Lệ thuộc và mất tự chủ quốc gia:
+- Trở thành "bãi thải công nghiệp" và nơi tiếp nhận công nghệ thấp.
+- Cạn kiệt tài nguyên và hủy hoại môi trường:
+- Gia tăng khoảng cách giàu nghèo và bất bình đẳng xã hội:
+- Xâm lăng văn hóa
+`    ],
     callout: {
       kind: 'quote',
-      text: 'Hội nhập bằng bản lĩnh, không phải bằng phụ thuộc.'
+      text: '"Biên giới mềm" không phải là ranh giới trên bản đồ địa lý mà là ranh giới của sự ảnh hưởng kinh tế, tài chính và công nghệ — phương thức thực hiện chủ nghĩa thực dân mới, xác lập thống trị chính trị không qua chiến tranh xâm lược.'
     },
     zDepth: 'front'
   }

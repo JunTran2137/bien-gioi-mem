@@ -21,6 +21,10 @@ interface Props {
   windowW?: number;
   /** Window pane height. Default 2.4. */
   windowH?: number;
+  /** Number of pane rows (horizontal divisions). Default 2. */
+  windowRows?: number;
+  /** Number of pane columns (vertical divisions). Default 2. */
+  windowCols?: number;
   /** Render decorative trim. */
   trim?: boolean;
   children?: ReactNode;
@@ -38,6 +42,8 @@ export function InteriorRoom({
   windowSpread = 1,
   windowW = 2.0,
   windowH = 2.4,
+  windowRows = 2,
+  windowCols = 2,
   trim = true,
   children
 }: Props) {
@@ -125,9 +131,13 @@ export function InteriorRoom({
                 ].map((f, k) => (
                   <mesh key={k} position={f.p}><boxGeometry args={f.s} /><meshStandardMaterial color="#5C4636" /></mesh>
                 ))}
-                {/* cross mullion */}
-                <mesh position={[0, yC, 0.02]}><boxGeometry args={[ww, 0.06, 0.04]} /><meshStandardMaterial color="#5C4636" /></mesh>
-                <mesh position={[0, yC, 0.02]}><boxGeometry args={[0.06, wh, 0.04]} /><meshStandardMaterial color="#5C4636" /></mesh>
+                {/* grid mullions — divide pane into windowRows × windowCols cells */}
+                {Array.from({ length: Math.max(0, windowRows - 1) }).map((_, r) => (
+                  <mesh key={`hL-${r}`} position={[0, yC - wh / 2 + (wh * (r + 1)) / windowRows, 0.02]}><boxGeometry args={[ww, 0.06, 0.04]} /><meshStandardMaterial color="#5C4636" /></mesh>
+                ))}
+                {Array.from({ length: Math.max(0, windowCols - 1) }).map((_, c) => (
+                  <mesh key={`vL-${c}`} position={[-ww / 2 + (ww * (c + 1)) / windowCols, yC, 0.02]}><boxGeometry args={[0.06, wh, 0.04]} /><meshStandardMaterial color="#5C4636" /></mesh>
+                ))}
               </group>
             );
           })}
@@ -150,8 +160,13 @@ export function InteriorRoom({
                 ].map((f, k) => (
                   <mesh key={k} position={f.p}><boxGeometry args={f.s} /><meshStandardMaterial color="#5C4636" /></mesh>
                 ))}
-                <mesh position={[0, yC, 0.02]}><boxGeometry args={[ww, 0.06, 0.04]} /><meshStandardMaterial color="#5C4636" /></mesh>
-                <mesh position={[0, yC, 0.02]}><boxGeometry args={[0.06, wh, 0.04]} /><meshStandardMaterial color="#5C4636" /></mesh>
+                {/* grid mullions — divide pane into windowRows × windowCols cells */}
+                {Array.from({ length: Math.max(0, windowRows - 1) }).map((_, r) => (
+                  <mesh key={`hR-${r}`} position={[0, yC - wh / 2 + (wh * (r + 1)) / windowRows, 0.02]}><boxGeometry args={[ww, 0.06, 0.04]} /><meshStandardMaterial color="#5C4636" /></mesh>
+                ))}
+                {Array.from({ length: Math.max(0, windowCols - 1) }).map((_, c) => (
+                  <mesh key={`vR-${c}`} position={[-ww / 2 + (ww * (c + 1)) / windowCols, yC, 0.02]}><boxGeometry args={[0.06, wh, 0.04]} /><meshStandardMaterial color="#5C4636" /></mesh>
+                ))}
               </group>
             );
           })}

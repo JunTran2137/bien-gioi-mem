@@ -27,12 +27,12 @@ export function LibraryScene() {
 
   // Concise nav labels so chapter buttons never truncate mid-word.
   const NAV_TITLES = [
-    'Khái niệm biên giới mềm',
-    'Hội nhập kinh tế quốc tế',
-    'Việt Nam trong hội nhập',
-    'Thách thức & nghịch lý',
-    'Giải pháp & tự chủ',
-    'Kết luận',
+    'Bối cảnh ra đời',
+    'Bản chất biên giới mềm',
+    'Mục tiêu chiến lược',
+    'Cơ chế thực hiện',
+    'Vai trò tập đoàn độc quyền',
+    'Hệ quả',
   ];
 
   const halfW = ROOM_W / 2;
@@ -323,20 +323,20 @@ function ContentPanel({ section }: { section: any }) {
         <meshPhysicalMaterial color="#fff" transparent opacity={0.99} roughness={0.15} clearcoat={0.7} metalness={0} />
       </RoundedBox>
 
-      <Text position={[0, 2.0, 0.15]} fontSize={0.38} color="#000" anchorX="center" anchorY="top" maxWidth={7.3} textAlign="center" lineHeight={1.05}>
+      <Text position={[0, 1.7, 0.15]} fontSize={0.3} color="#000" anchorX="center" anchorY="top" maxWidth={7.2} textAlign="center" lineHeight={1.08}>
         {section.title}
       </Text>
-      {section.intro && (
-        <Text position={[0, 1.42, 0.15]} fontSize={0.225} color="#000" anchorX="center" anchorY="top" maxWidth={6.9} textAlign="center" lineHeight={1.12}>
+      {/* {section.intro && (
+        <Text position={[0, 1, 0.15]} fontSize={0.215} color="#000" anchorX="center" anchorY="top" maxWidth={6.9} textAlign="center" lineHeight={1.12}>
           {section.intro}
         </Text>
-      )}
+      )} */}
 
-      <Text position={[0, section.intro ? 0.62 : 1.42, 0.15]} fontSize={0.2} color="#000" anchorX="center" anchorY="top" maxWidth={6.9} textAlign="left" lineHeight={1.18}>
+      <Text position={[0, section.intro ? 1 : 1.4, 0.15]} fontSize={0.2} color="#000" anchorX="center" anchorY="top" maxWidth={6.9} textAlign="left" lineHeight={1.5}>
         {(section.paragraphs[0] || '').slice(0, 360) + (section.paragraphs[0]?.length > 360 ? '…' : '')}
       </Text>
 
-      {section.callout && (
+      {/* {section.callout && (
         <group position={[0, -1.42, 0.05]}>
           <RoundedBox args={[6.9, 1.1, 0.1]} radius={0.12} smoothness={4}>
             <meshStandardMaterial color={hex.primarySoft} />
@@ -345,7 +345,7 @@ function ContentPanel({ section }: { section: any }) {
             &quot;{section.callout.text.slice(0, 180)}{section.callout.text.length > 180 ? '…' : ''}&quot;
           </Text>
         </group>
-      )}
+      )} */}
     </group>
   );
 }

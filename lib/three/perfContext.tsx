@@ -69,10 +69,18 @@ function computeTier(): PerfState {
   if (!webgl) tier = 'fallback';
   else if (cores < 4 || mem < 4) tier = 'low';
   else if (isMobile || cores < 8 || mem < 8) tier = 'mid';
-  // Mobile gets 'mid' instead of 'fallback' — city always renders fully.
+  // Mobile / narrow window gets the lighter 'mid' scene (fewer buildings = less
+  // lag) — but it now still renders crisp (native DPR + antialiasing below).
 
+  // DPR strategy: render at the display's NATIVE ratio — never force it UP.
+  // Many browsers run at devicePixelRatio < 1 (zoomed-out window, e.g. 0.8);
+  // forcing min=1 there SUPERSAMPLES (renders ~56% more pixels than the screen
+  // can show) = pure lag for almost no visible gain. So the min follows the
+  // device down to its native ratio, and the max only CAPS Hi-DPI/Retina so a
+  // 2× screen doesn't quadruple fill-rate. Crispness of hard building/road
+  // edges is handled by antialias (below) — cheap MSAA, not expensive upscaling.
   const dpr: [number, number] =
-    tier === 'high' ? [1, 1] : tier === 'mid' ? [0.85, 1] : [0.7, 0.9];
+    tier === 'high' ? [0.8, 1.5] : tier === 'mid' ? [0.75, 1.25] : [0.66, 1.0];
 
   return {
     tier,
@@ -85,9 +93,12 @@ function computeTier(): PerfState {
     particles: tier === 'high',
     stars: tier === 'high' || tier === 'mid',
     clouds: tier === 'high' || tier === 'mid',
-    antialias: tier === 'high',
+    // Antialiasing is the single biggest perceived-quality lever for a city full
+    // of hard building/road edges. It's cheap MSAA (no post-process pass) and at
+    // these pixel counts costs almost nothing, so enable it down to the low tier.
+    antialias: tier !== 'fallback',
     animFps: tier === 'high' ? 60 : tier === 'mid' ? 30 : 20,
-    simpleAgents: tier !== 'high'
+    simpleAgents: tier === 'low' || tier === 'fallback'
   };
 }
 

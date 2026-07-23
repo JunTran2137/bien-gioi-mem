@@ -40,7 +40,12 @@ export function Hotspot({ children, position, label, sub, route, onClick, ariaLa
   // Freeze per-mesh local matrices for children that never move. The Hotspot group
   // itself still updates (it scales on hover), but the static landmark meshes inside
   // don't need to recompose position/rotation/scale every frame. Called once on mount.
+  //
+  // Skipped in development so Fast Refresh reflects geometry edits instantly —
+  // with frozen matrices, changed position props would not recompute until a full
+  // page reload. The optimization only matters for the idle production build.
   useLayoutEffect(() => {
+    if (process.env.NODE_ENV !== 'production') return;
     const g = grpRef.current;
     if (!g) return;
     g.traverse((child) => {

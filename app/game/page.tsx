@@ -28,7 +28,7 @@ export default function GamePage({ searchParams }: { searchParams: { play?: stri
       </p>
 
       <div className="mt-8 grid sm:grid-cols-2 gap-4">
-        <a href="/game/describe" className="block rounded-2xl border border-border bg-surface p-6 hover:shadow-md transition">
+        <a href="/game?play=describe" className="block rounded-2xl border border-border bg-surface p-6 hover:shadow-md transition">
           <h2 className="font-display text-xl text-text mb-1">📜 Luận Giải</h2>
           <p className="text-muted text-sm">
             Mỗi nhóm viết mô tả cho thẻ của mình, các nhóm khác giơ thẻ đoán qua camera. Có phản biện &amp; bỏ phiếu.

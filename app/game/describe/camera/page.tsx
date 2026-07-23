@@ -4,18 +4,47 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { getSocket } from '@/lib/socket-client';
-import { cardByMarker } from '@/data/describeCards';
 
 /**
- * /game/describe/camera — per-group phone camera for the "Luận Giải" game.
+ * /game/describe/camera — per-group camera (phone OR laptop) for the "Luận Giải" game.
  *
- * One phone per group. Auto-detects the user's group from session.
+ * One device per group. Auto-detects the user's group from session.
+ *
+ * The device does ZERO recognition — it only captures the webcam and streams
+ * two things: a small thumbnail (~5fps) for the host grid, and a sharp frame
+ * (~1fps) for the SERVER to OCR. The server reads the card NAME, matches it to
+ * a card and drives the guess, then sends the recognised name back here to show.
+ * This keeps every device (weak phones included) smooth and lag-free.
  */
 
-const DETECT_WIDTH = 256;   // small canvas for ArUco detection only
-const STREAM_WIDTH = 240;   // stream canvas — 240px is enough for thumbnails, ~4× smaller data than 480px
-const FRAME_QUALITY = 0.55; // slightly higher quality at lower res for readable card text
-const TARGET_FPS = 4;       // 4fps is smooth enough for still-ish card display
+const STREAM_WIDTH = 360;    // thumbnail width for the host grid
+const FRAME_QUALITY = 0.6;   // thumbnail JPEG quality
+const STREAM_FPS = 30;       // smooth live feed on the host grid
+const OCR_FRAME_WIDTH = 960; // sharp frame sent to the server for OCR (card text must be legible)
+const OCR_FRAME_QUALITY = 0.82;
+const OCR_FRAME_FPS = 1.2;   // low rate — the card doesn't change fast; keeps bandwidth + server load low
+
+// A tiny Web Worker whose only job is to fire two heartbeats. Timers inside a
+// worker are NOT throttled to ~1/sec the way a background tab's main-thread
+// setInterval is — so the feed keeps streaming at full FPS even when this
+// camera tab is in the background (e.g. testing host + camera on one machine).
+const TICK_WORKER_SRC = `let s=null,o=null;onmessage=(e)=>{const d=e.data;if(d&&d.type==='start'){clearInterval(s);clearInterval(o);s=setInterval(()=>postMessage('s'),d.streamMs);o=setInterval(()=>postMessage('o'),d.ocrMs);}else if(d&&d.type==='stop'){clearInterval(s);clearInterval(o);s=o=null;}};`;
+
+// The real 30fps pipeline: read VideoFrames straight from the camera track via a
+// transferred ReadableStream (MediaStreamTrackProcessor) and JPEG-encode them on
+// an OffscreenCanvas — ENTIRELY inside the worker. This is decoupled from the
+// <video> element's paint rate and from main-thread/timer throttling, so it
+// keeps delivering full FPS even when the tab is hidden. The main thread only
+// forwards the finished JPEG bytes over the socket.
+const CAPTURE_WORKER_SRC = `
+let running=false,reader=null,sMs=33,oMs=833,tW=360,tQ=0.6,oW=720,oQ=0.72;
+let tCan=null,tCtx=null,oCan=null,oCtx=null,lastT=0,lastO=0;
+let camN=0,emitN=0,encSum=0,encCnt=0,statT=0,tBusy=false,oBusy=false;
+onmessage=async(e)=>{const d=e.data;
+ if(d.type==='config'){sMs=d.sMs;oMs=d.oMs;tW=d.tW;tQ=d.tQ;oW=d.oW;oQ=d.oQ;}
+ else if(d.type==='start'){if(running)return;running=true;reader=d.readable.getReader();loop();}
+ else if(d.type==='stop'){running=false;try{reader&&reader.cancel();}catch(_){}reader=null;}};
+async function loop(){while(running){let res;try{res=await reader.read();}catch(_){break;}if(res.done)break;const frame=res.value;try{const vw=frame.displayWidth||frame.codedWidth,vh=frame.displayHeight||frame.codedHeight;const now=performance.now();camN++;if(now-statT>=1000){postMessage({type:'stats',cam:camN,emit:emitN,enc:encCnt?Math.round(encSum/encCnt):0});camN=0;emitN=0;encSum=0;encCnt=0;statT=now;}if(vw&&vh){if(now-lastT>=sMs&&!tBusy){lastT=now;const w=tW,h=Math.round(vh/vw*w);if(!tCan||tCan.width!==w||tCan.height!==h){tCan=new OffscreenCanvas(w,h);tCtx=tCan.getContext('2d');}tCtx.drawImage(frame,0,0,w,h);tBusy=true;const et0=performance.now();tCan.convertToBlob({type:'image/jpeg',quality:tQ}).then(b=>b.arrayBuffer()).then(buf=>{encSum+=performance.now()-et0;encCnt++;emitN++;postMessage({type:'thumb',buf},[buf]);tBusy=false;}).catch(()=>{tBusy=false;});}if(now-lastO>=oMs&&!oBusy){lastO=now;const cw=vw*0.82,ch=vh*0.56,cx=(vw-cw)/2,cy=(vh-ch)/2;const w=oW,h=Math.round(ch/cw*w);if(!oCan||oCan.width!==w||oCan.height!==h){oCan=new OffscreenCanvas(w,h);oCtx=oCan.getContext('2d');}oCtx.drawImage(frame,cx,cy,cw,ch,0,0,w,h);oBusy=true;oCan.convertToBlob({type:'image/jpeg',quality:oQ}).then(b=>b.arrayBuffer()).then(buf=>{postMessage({type:'ocr',buf},[buf]);oBusy=false;}).catch(()=>{oBusy=false;});}}}finally{frame.close();}}}`;
 
 function CameraInner() {
   const params = useSearchParams();
@@ -23,20 +52,19 @@ function CameraInner() {
   const { status: sessionStatus } = useSession(); // session data not needed, only auth status
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);   // detect canvas
-  const frameCanvasRef = useRef<HTMLCanvasElement | null>(null); // stream canvas
-  const detectCtxRef = useRef<CanvasRenderingContext2D | null>(null); // cached detect ctx
-  const frameCtxRef = useRef<CanvasRenderingContext2D | null>(null);  // cached stream ctx
-  const detectorRef = useRef<any>(null);
+  const frameCanvasRef = useRef<HTMLCanvasElement | null>(null); // thumbnail canvas
+  const frameCtxRef = useRef<CanvasRenderingContext2D | null>(null);  // cached thumbnail ctx
+  const ocrCanvasRef = useRef<HTMLCanvasElement | null>(null); // sharp OCR-frame canvas
+  const ocrCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const rvfcRef = useRef<number | null>(null); // requestVideoFrameCallback handle
+  const streamTimerRef = useRef<any>(null);   // setInterval handle for the thumbnail relay
+  const ocrTimerRef = useRef<any>(null);      // setInterval handle for the OCR-frame relay
+  const tickWorkerRef = useRef<Worker | null>(null); // heartbeat worker (survives background-tab throttling)
+  const captureWorkerRef = useRef<Worker | null>(null); // 30fps track-processor capture+encode worker
   const runningRef = useRef(false);
-  const lastTickRef = useRef(0);
-  const encodingRef = useRef(false); // skip frame if previous toBlob not done
+  const encodingRef = useRef(false);    // skip thumbnail frame if previous toBlob not done
+  const ocrEncodingRef = useRef(false); // skip OCR frame if previous toBlob not done
   const groupRef = useRef<string>('');
-  const lastTilesKeyRef = useRef<string>(''); // dedupe tile emits
-  const lastDetectedRef = useRef<string | null>(null); // dedupe setState
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null); // cached socket
   const wakeLockRef = useRef<WakeLockSentinel | null>(null); // prevent screen sleep
 
@@ -46,7 +74,9 @@ function CameraInner() {
   const [alreadyConnected, setAlreadyConnected] = useState(false);
   const [status, setStatus] = useState<'idle' | 'starting' | 'live' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
-  const [detected, setDetected] = useState<string | null>(null);
+  const [detected, setDetected] = useState<string | null>(null); // card name the server recognised
+  const [ocrText, setOcrText] = useState('');                    // raw text the server last read
+  const [stat, setStat] = useState<{ cam: number; emit: number; enc: number } | null>(null); // worker capture stats
 
   useEffect(() => { groupRef.current = groupId; }, [groupId]);
 
@@ -75,93 +105,78 @@ function CameraInner() {
     return () => { socket.off('connect', announce); };
   }, [roomCode, groupId, groupName]);
 
-  const loop = useCallback(() => {
-    if (!runningRef.current) return;
+  // ── Thumbnail relay: stream a small JPEG so the host grid shows each group's
+  //    live camera. Driven by a wall-clock interval (keeps ticking even when the
+  //    <video> scrolls out of view / the tab briefly blurs). ────────────────
+  const streamFrame = useCallback(() => {
+    if (!runningRef.current || encodingRef.current) return;
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const detector = detectorRef.current;
-    if (!video || !canvas || !detector || video.readyState < 2) return;
-    const vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw || !vh) return;
-
-    // ── Detection on small canvas (fast) ──────────────────────────────
-    const dw = DETECT_WIDTH;
-    const dh = Math.round((vh / vw) * dw);
-    if (canvas.width !== dw || canvas.height !== dh) {
-      canvas.width = dw; canvas.height = dh;
-      detectCtxRef.current = null; // reset cached ctx on resize
-    }
-    // Cache the 2D context — getContext() every tick is wasteful
-    if (!detectCtxRef.current) {
-      detectCtxRef.current = canvas.getContext('2d', { willReadFrequently: true });
-    }
-    const ctx = detectCtxRef.current;
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, dw, dh);
-
-    let tiles: { id: number }[] = [];
-    try {
-      const imageData = ctx.getImageData(0, 0, dw, dh);
-      const markers = detector.detect(imageData) || [];
-      // Only send marker IDs — center coordinates are computed but never used by server
-      tiles = markers.map((m: any) => ({ id: m.id }));
-    } catch { /* skip bad frame */ }
-
-    const card = tiles.length ? cardByMarker(tiles[0].id) : null;
-    // Only update React state when detected card changes (avoid re-render every tick)
-    const detectedName = card ? card.name : null;
-    if (detectedName !== lastDetectedRef.current) {
-      lastDetectedRef.current = detectedName;
-      setDetected(detectedName);
-    }
-
-    // Use cached socket reference (avoid getSocket() call per tick)
     const socket = socketRef.current;
     const gid = groupRef.current;
-    if (!socket || !gid) return;
-
-    // Only emit tiles when they actually changed (dedupe to save socket traffic)
-    const tilesKey = tiles.map(t => t.id).join(',');
-    if (tilesKey !== lastTilesKeyRef.current) {
-      lastTilesKeyRef.current = tilesKey;
-      socket.emit('dgcam:tiles', { roomCode, groupId: gid, tiles });
-    }
-
-    // ── Stream on full-quality canvas (async toBlob, skip if busy) ────
-    // Also enforce TARGET_FPS via wall-clock time
-    const now = Date.now();
-    const minInterval = 1000 / TARGET_FPS;
-    if (!encodingRef.current && now - lastTickRef.current >= minInterval) {
-      lastTickRef.current = now;
-      encodingRef.current = true;
-      // Create/reuse a separate canvas for streaming
-      if (!frameCanvasRef.current) {
-        frameCanvasRef.current = document.createElement('canvas');
-      }
-      const fc = frameCanvasRef.current;
-      const fw = STREAM_WIDTH;
-      const fh = Math.round((vh / vw) * fw);
-      if (fc.width !== fw || fc.height !== fh) {
-        fc.width = fw; fc.height = fh;
-        frameCtxRef.current = null; // reset cached ctx on resize
-      }
-      // Cache the stream canvas context
-      if (!frameCtxRef.current) frameCtxRef.current = fc.getContext('2d');
-      const fctx = frameCtxRef.current;
-      if (fctx) {
-        fctx.drawImage(video, 0, 0, fw, fh);
-        fc.toBlob((blob) => {
-          encodingRef.current = false;
-          if (!blob || !runningRef.current) return;
-          // Send Blob directly — Socket.io v4 handles Blob as binary attachment,
-          // receiver gets ArrayBuffer. Skips the extra blob.arrayBuffer() async hop.
-          socket.compress(false).emit('dgcam:frame', { roomCode, groupId: gid, jpeg: blob });
-        }, 'image/jpeg', FRAME_QUALITY);
-      } else {
-        encodingRef.current = false;
-      }
-    }
+    if (!video || !socket || !gid || video.readyState < 2) return;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return;
+    if (!frameCanvasRef.current) frameCanvasRef.current = document.createElement('canvas');
+    const fc = frameCanvasRef.current;
+    const fw = STREAM_WIDTH, fh = Math.round((vh / vw) * fw);
+    if (fc.width !== fw || fc.height !== fh) { fc.width = fw; fc.height = fh; frameCtxRef.current = null; }
+    if (!frameCtxRef.current) frameCtxRef.current = fc.getContext('2d');
+    const fctx = frameCtxRef.current;
+    if (!fctx) return;
+    encodingRef.current = true;
+    fctx.drawImage(video, 0, 0, fw, fh);
+    fc.toBlob((blob) => {
+      encodingRef.current = false;
+      if (!blob || !runningRef.current) return;
+      // volatile: if the socket buffer is backed up (slow network/CPU), DROP this
+      // frame instead of queuing it. Live video must stay near real-time — a
+      // growing queue is exactly what makes the feed lag further and further behind.
+      socket.volatile.compress(false).emit('dgcam:frame', { roomCode, groupId: gid, jpeg: blob });
+    }, 'image/jpeg', FRAME_QUALITY);
   }, [roomCode]);
+
+  // ── OCR-frame relay: a sharp, low-rate frame the SERVER recognises. The card
+  //    name must be legible, so this is bigger/higher-quality than the thumbnail
+  //    but sent only ~1fps so it barely costs the device anything. ───────────
+  const ocrFrame = useCallback(() => {
+    if (!runningRef.current || ocrEncodingRef.current) return;
+    const video = videoRef.current;
+    const socket = socketRef.current;
+    const gid = groupRef.current;
+    if (!video || !socket || !gid || video.readyState < 2) return;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return;
+    if (!ocrCanvasRef.current) ocrCanvasRef.current = document.createElement('canvas');
+    const oc = ocrCanvasRef.current;
+    const ow = Math.min(OCR_FRAME_WIDTH, vw), oh = Math.round((vh / vw) * ow);
+    if (oc.width !== ow || oc.height !== oh) { oc.width = ow; oc.height = oh; ocrCtxRef.current = null; }
+    if (!ocrCtxRef.current) ocrCtxRef.current = oc.getContext('2d');
+    const octx = ocrCtxRef.current;
+    if (!octx) return;
+    ocrEncodingRef.current = true;
+    octx.drawImage(video, 0, 0, ow, oh);
+    oc.toBlob((blob) => {
+      ocrEncodingRef.current = false;
+      if (!blob || !runningRef.current) return;
+      socket.volatile.compress(false).emit('dgcam:ocrframe', { roomCode, groupId: gid, jpeg: blob });
+    }, 'image/jpeg', OCR_FRAME_QUALITY);
+  }, [roomCode]);
+
+  // Receive the server's recognition result for THIS group and show it.
+  useEffect(() => {
+    if (!groupId) return;
+    const socket = getSocket();
+    const onRecognized = (d: { groupId: string; name: string | null; text?: string }) => {
+      if (d.groupId !== groupRef.current) return;
+      // Keep the last confident name on screen — non-matching frames (blur /
+      // mid-move) still arrive with name=null and would otherwise wipe it out,
+      // making it look like nothing was ever recognised.
+      if (d.name) setDetected(d.name);
+      setOcrText(d.text || '');
+    };
+    socket.on('dg:cameraRecognized', onRecognized);
+    return () => { socket.off('dg:cameraRecognized', onRecognized); };
+  }, [groupId]);
 
   const start = useCallback(async () => {
     if (!roomCode) { setStatus('error'); setErrorMsg('Thiếu mã phòng.'); return; }
@@ -175,16 +190,9 @@ function CameraInner() {
           : 'Trình duyệt không hỗ trợ camera.');
         return;
       }
-      if (!detectorRef.current) {
-        const mod: any = await import('js-aruco2');
-        const AR = mod.AR ?? mod.default?.AR ?? mod.default;
-        detectorRef.current = new AR.Detector({ dictionaryName: 'ARUCO' });
-      }
       const stream = await navigator.mediaDevices.getUserMedia({
-        // 640×480 ideal: drawImage from 1280p costs 4× more CPU than 640p
-        // with zero quality benefit — ArUco quality depends on marker size
-        // in the 256px detection canvas, not the source resolution.
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 640, max: 1280 }, height: { ideal: 480, max: 720 } },
+        // Prefer 1280×720 so the server OCR gets a sharp, legible card name.
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30, max: 60 } },
         audio: false
       });
       streamRef.current = stream;
@@ -196,45 +204,93 @@ function CameraInner() {
       // Acquire wake lock to prevent screen from sleeping mid-game
       if ('wakeLock' in navigator) {
         try {
-          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+          const wl = await (navigator as any).wakeLock.request('screen');
+          // The OS auto-releases the lock whenever the page is hidden; null the
+          // ref then so the visibilitychange handler knows to re-acquire it.
+          wl.addEventListener?.('release', () => { if (wakeLockRef.current === wl) wakeLockRef.current = null; });
+          wakeLockRef.current = wl;
         } catch { /* permission denied or unsupported, non-fatal */ }
       }
-      // Cache socket once (avoids getSocket() call in every loop tick)
+      // Cache socket once (avoids getSocket() call in every tick)
       socketRef.current = getSocket();
-      // Prefer requestVideoFrameCallback (fires when GPU has new decoded frame)
-      // IMPORTANT: gate all work behind minInterval — RVFC fires at video FPS (30fps),
-      // we only want to do detection + stream at TARGET_FPS (4fps). Without the gate
-      // ArUco would run 30fps which wastes CPU on mobile.
-      const minInterval = 1000 / TARGET_FPS;
-      const vid = videoRef.current!;
-      const useRvfc = typeof (vid as any).requestVideoFrameCallback === 'function';
-      if (useRvfc) {
-        const scheduleRvfc = () => {
-          if (!runningRef.current) return;
-          // Only do actual work when enough time has elapsed
-          if (Date.now() - lastTickRef.current >= minInterval) loop();
-          rvfcRef.current = (vid as any).requestVideoFrameCallback(scheduleRvfc);
-        };
-        rvfcRef.current = (vid as any).requestVideoFrameCallback(scheduleRvfc);
+
+      // Preferred path: read frames straight from the camera track in a worker
+      // (MediaStreamTrackProcessor) and JPEG-encode on an OffscreenCanvas there.
+      // This hits a true 30fps and is immune to background-tab throttling, since
+      // it never touches a main-thread timer or the <video> paint loop.
+      const track = stream.getVideoTracks()[0];
+      // Nudge the camera into a 30fps capture mode even if getUserMedia negotiated
+      // a slower one (many webcams default to 20-24fps at 720p). Best-effort — the
+      // sensor + lighting still cap the real rate, but this switches the mode when
+      // a 30fps mode exists. Log the mode actually granted for diagnostics.
+      try {
+        await track.applyConstraints({ frameRate: { ideal: 30, min: 24 } });
+        const s = track.getSettings?.();
+        if (s) console.log('[camera] granted mode:', s.width + 'x' + s.height + '@' + Math.round(s.frameRate || 0) + 'fps');
+      } catch { /* constraint unsupported — keep whatever mode we got */ }
+      const canProcess = typeof (window as any).MediaStreamTrackProcessor !== 'undefined'
+        && typeof OffscreenCanvas !== 'undefined'
+        && typeof (OffscreenCanvas.prototype as any).convertToBlob === 'function'
+        && !!track;
+
+      const startHeartbeatFallback = () => {
+        try {
+          const blob = new Blob([TICK_WORKER_SRC], { type: 'application/javascript' });
+          const url = URL.createObjectURL(blob);
+          const w = new Worker(url);
+          URL.revokeObjectURL(url);
+          w.onmessage = (ev) => { if (ev.data === 's') streamFrame(); else if (ev.data === 'o') ocrFrame(); };
+          w.postMessage({ type: 'start', streamMs: Math.round(1000 / STREAM_FPS), ocrMs: Math.round(1000 / OCR_FRAME_FPS) });
+          tickWorkerRef.current = w;
+        } catch {
+          streamTimerRef.current = setInterval(streamFrame, Math.round(1000 / STREAM_FPS));
+          ocrTimerRef.current = setInterval(ocrFrame, Math.round(1000 / OCR_FRAME_FPS));
+        }
+      };
+
+      if (canProcess) {
+        try {
+          const processor = new (window as any).MediaStreamTrackProcessor({ track });
+          const readable = processor.readable;
+          const blob = new Blob([CAPTURE_WORKER_SRC], { type: 'application/javascript' });
+          const url = URL.createObjectURL(blob);
+          const w = new Worker(url);
+          URL.revokeObjectURL(url);
+          const rc = roomCode;
+          w.onmessage = (ev) => {
+            const m = ev.data;
+            if (m.type === 'stats') { setStat({ cam: m.cam, emit: m.emit, enc: m.enc }); console.log('[camera] cam=' + m.cam + 'fps  emit=' + m.emit + 'fps  enc=' + m.enc + 'ms'); return; }
+            const socket = socketRef.current;
+            const gid = groupRef.current;
+            if (!socket || !runningRef.current || !gid) return;
+            if (m.type === 'thumb') socket.volatile.compress(false).emit('dgcam:frame', { roomCode: rc, groupId: gid, jpeg: m.buf });
+            else if (m.type === 'ocr') socket.volatile.compress(false).emit('dgcam:ocrframe', { roomCode: rc, groupId: gid, jpeg: m.buf });
+          };
+          w.postMessage({ type: 'config', sMs: Math.round(1000 / STREAM_FPS), oMs: Math.round(1000 / OCR_FRAME_FPS), tW: STREAM_WIDTH, tQ: FRAME_QUALITY, oW: OCR_FRAME_WIDTH, oQ: OCR_FRAME_QUALITY });
+          w.postMessage({ type: 'start', readable }, [readable]);
+          captureWorkerRef.current = w;
+        } catch {
+          startHeartbeatFallback();
+        }
       } else {
-        rafRef.current = setInterval(loop, Math.round(minInterval)) as any;
+        startHeartbeatFallback();
       }
     } catch (e: any) {
       setStatus('error');
       setErrorMsg(e?.name === 'NotAllowedError' ? 'Bạn đã từ chối quyền camera.' : 'Không mở được camera: ' + (e?.message || 'lỗi'));
     }
-  }, [roomCode, groupId, loop]);
+  }, [roomCode, groupId, streamFrame, ocrFrame]);
 
   const stop = useCallback(() => {
     runningRef.current = false;
-    if (rafRef.current) clearInterval(rafRef.current);
-    rafRef.current = null;
-    const vid = videoRef.current;
-    if (rvfcRef.current !== null && vid && typeof (vid as any).cancelVideoFrameCallback === 'function') {
-      (vid as any).cancelVideoFrameCallback(rvfcRef.current);
-    }
-    rvfcRef.current = null;
+    if (captureWorkerRef.current) { captureWorkerRef.current.postMessage({ type: 'stop' }); captureWorkerRef.current.terminate(); captureWorkerRef.current = null; }
+    if (tickWorkerRef.current) { tickWorkerRef.current.postMessage({ type: 'stop' }); tickWorkerRef.current.terminate(); tickWorkerRef.current = null; }
+    if (streamTimerRef.current) clearInterval(streamTimerRef.current);
+    streamTimerRef.current = null;
+    if (ocrTimerRef.current) clearInterval(ocrTimerRef.current);
+    ocrTimerRef.current = null;
     socketRef.current = null;
+    setOcrText('');
     // Release wake lock
     wakeLockRef.current?.release().catch(() => {});
     wakeLockRef.current = null;
@@ -245,6 +301,22 @@ function CameraInner() {
   }, []);
 
   useEffect(() => () => stop(), [stop]);
+
+  // When the phone returns to the foreground (user tabbed away, screen slept,
+  // notification, etc.) mobile browsers pause the <video> and drop the wake
+  // lock. Re-play the stream and re-acquire the lock so the feed keeps flowing
+  // without the user having to restart the camera.
+  useEffect(() => {
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible' || !runningRef.current) return;
+      try { await videoRef.current?.play(); } catch { /* autoplay guard, non-fatal */ }
+      if ('wakeLock' in navigator && !wakeLockRef.current) {
+        try { wakeLockRef.current = await (navigator as any).wakeLock.request('screen'); } catch { /* non-fatal */ }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   // Hard block: another device from same group is already connected
   if (alreadyConnected) {
@@ -304,12 +376,35 @@ function CameraInner() {
           )}
           {status === 'live' && (
             <div className="absolute top-2 left-2 text-[11px] bg-black/50 text-white px-2 py-1 rounded">
-              ● LIVE {detected ? `· ${detected}` : '· chưa thấy thẻ'}
+              ● LIVE {detected ? `· ${detected}` : '· máy chủ đang đọc…'}
+            </div>
+          )}
+          {status === 'live' && stat && (
+            <div className="absolute top-2 right-2 text-[11px] font-mono bg-black/50 text-white px-2 py-1 rounded tabular-nums">
+              cam {stat.cam} · emit {stat.emit} · enc {stat.enc}ms
+            </div>
+          )}
+          {/* Guide box: OCR only reads THIS centered region (82%×56%). Align the
+              card inside it so its text fills the box — dramatically improves reads. */}
+          {status === 'live' && (
+            <div className="pointer-events-none absolute" style={{ left: '9%', top: '22%', width: '82%', height: '56%' }}>
+              <div className={`w-full h-full rounded-lg border-2 border-dashed ${detected ? 'border-primary' : 'border-white/70'}`} />
+              <div className="absolute -top-5 left-0 text-[10px] text-white/80 bg-black/40 px-1.5 py-0.5 rounded">Đặt thẻ vừa khung này</div>
             </div>
           )}
         </div>
 
-        <canvas ref={canvasRef} className="hidden" />
+        {/* Live recognition readout — the server sends back what it read so you can aim/focus the card */}
+        {status === 'live' && (
+          <div className="rounded-xl border border-border bg-surface px-4 py-3 text-sm">
+            <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Chữ đọc được (máy chủ)</div>
+            {detected ? (
+              <div className="font-semibold text-primary">✓ {detected}</div>
+            ) : (
+              <div className="font-mono text-xs text-muted break-words min-h-[1rem]">{ocrText || '… đang quét, giơ thẻ vào khung hình'}</div>
+            )}
+          </div>
+        )}
 
         {status === 'error' && (
           <div className="rounded-xl border border-danger/40 bg-danger/10 text-danger text-sm px-4 py-3">{errorMsg}</div>
@@ -327,9 +422,9 @@ function CameraInner() {
         </div>
 
         <ol className="text-sm text-muted space-y-2 leading-relaxed">
-          <li><b className="text-text">1.</b> Khi mô tả hiện trên màn hình chính, giơ thẻ (in mã ArUco) bạn cho là đúng trước camera.</li>
-          <li><b className="text-text">2.</b> Tên thẻ nhận diện được sẽ hiện ở đây và trên màn hình quản trò.</li>
-          <li><b className="text-text">3.</b> Mỗi nhóm chỉ cần 1 điện thoại bật camera.</li>
+          <li><b className="text-text">1.</b> Khi mô tả hiện trên màn hình chính, giơ thẻ (có in <b className="text-text">TÊN thẻ</b>) bạn cho là đúng trước camera.</li>
+          <li><b className="text-text">2.</b> Giữ thẻ <b className="text-text">thẳng, rõ nét, đủ sáng</b> — máy chủ nhận diện tên rồi hiện ở đây và trên màn hình quản trò.</li>
+          <li><b className="text-text">3.</b> Mỗi nhóm chỉ cần 1 thiết bị (điện thoại hoặc laptop) bật camera.</li>
         </ol>
       </main>
     </div>

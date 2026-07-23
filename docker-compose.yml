@@ -15,6 +15,18 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - DATABASE_PATH=/app/data/db.sqlite
       - USE_HTTPS=0
+      - OCR_URL=http://ocr:8868/ocr
+    depends_on:
+      - ocr
+    restart: unless-stopped
+
+  ocr:
+    build: ./ocr-service
+    container_name: bien-gioi-mem-ocr
+    expose:
+      - "8868"
+    ports:
+      - "8868:8868" # exposed to host so the dev server (npm run dev) can reach it too
     restart: unless-stopped
 
   caddy:

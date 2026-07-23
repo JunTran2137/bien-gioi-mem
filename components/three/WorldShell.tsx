@@ -14,15 +14,18 @@ const WorldCanvas = dynamic(() => import('./WorldCanvas').then((m) => m.WorldCan
 /**
  * Routes that are intentionally rendered as a full-screen 2D experience on
  * every tier (not hidden behind the 3D world). The camera page is a standalone
- * capture device.
+ * capture device (phone/laptop webcam grid), so running the (blurred, covered)
+ * 3D city behind it only steals GPU and makes the webcam thumbnails stutter —
+ * render it flat instead.
  */
 const TWO_D_ROUTES = ['/camera', '/game/describe/camera', '/dev-login'];
 
 /**
  * Routes that keep the live 3D world as their background and float their DOM
- * page on top as a popup overlay (e.g. the Quiz board game over the arena).
+ * page on top as a popup overlay (e.g. the Quiz board game over the arena, the
+ * Debate "phản biện" room, and the "Luận Giải" describe room).
  */
-const OVERLAY_ROUTES: string[] = ['/game/describe', '/game/debate'];
+const OVERLAY_ROUTES: string[] = ['/game/debate', '/game/describe'];
 
 function Loader() {
   return (

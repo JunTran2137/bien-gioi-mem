@@ -17,3 +17,15 @@ npm-debug.log*
 next-env.d.ts
 certs/
 *.pem
+
+# Large media — copied to the server separately (exceed GitHub 100MB limit)
+/MV MLN.mp4
+/public/videos/
+
+# OCR data blobs & local dev/test artifacts
+vie.traineddata
+scripts/last-ocr-frame.jpg
+scripts/ocr-test-out.txt
+scripts/ocr-phrases.txt
+scripts/ocr-test.ps1
+bien-gioi-mem.txt

@@ -10,11 +10,9 @@ import { AuthButton } from '../AuthButton';
 const ROUTE_TITLES: Record<string, string> = {
   '/': 'Thành phố',
   '/theory': '📚 Thư viện',
-  '/flashcards': '🎓 Học viện · Flashcard',
+  '/flashcards': '🎓 Học viện',
   '/leaderboard': '🏆 Đài vinh danh',
   '/game': '⚔️ Đấu trường',
-  '/game/quiz': '⚡ Quiz Arena',
-  '/game/debate': '🎭 Nghị trường',
   '/cinema': '🎬 Rạp Chiếu Phim',
   '/townhall': '🏛️ Tòa thị chính'
 };

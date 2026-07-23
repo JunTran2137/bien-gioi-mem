@@ -521,7 +521,7 @@ function RoleGate({ creating, onHost }: { creating: boolean; onHost: () => void 
               <p className="text-xs text-muted mt-0.5">Game tranh luận mới — mô tả thẻ, nhóm khác giơ thẻ đoán.</p>
             </div>
             <button
-              onClick={() => router.push('/game/describe')}
+              onClick={() => router.push('/game?play=describe')}
               className="shrink-0 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition"
             >
               Vào ngay →

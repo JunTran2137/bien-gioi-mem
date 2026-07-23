@@ -66,7 +66,6 @@ export function AcademyScene() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, order, card]);
 
-  const knownCount = Object.values(progress).filter(s => s === 'known').length;
   const halfW = ROOM_W / 2;
   const halfD = ROOM_D / 2;
 
@@ -81,9 +80,11 @@ export function AcademyScene() {
         ceilingColor="#FFFFFF"
         windows
         windowCount={2}
-        windowSpread={0.55}
-        windowW={8}
-        windowH={2}
+        windowSpread={0.45}
+        windowW={3}
+        windowH={3}
+        windowRows={2}
+        windowCols={2}
       />
 
       {/* Two exit doors on the back wall (+Z), behind the class */}
@@ -100,15 +101,6 @@ export function AcademyScene() {
         </group>
       ))}
 
-      {/* Front-wall world map / poster */}
-      <mesh position={[6.5, 4.5, -halfD + 0.15]}>
-        <planeGeometry args={[3.2, 2]} />
-        <meshStandardMaterial color="#A8D8F0" />
-      </mesh>
-      <Text position={[6.5, 4.5, -halfD + 0.18]} fontSize={0.18} color={hex.text} anchorX="center" anchorY="middle">
-        🌏 BẢN ĐỒ THẾ GIỚI
-      </Text>
-
       {/* Wall clock — mounted directly ABOVE the chalkboard, centered */}
       <group position={[0, 7.4, -halfD + 0.2]}>
         <mesh position={[0, 0, -0.01]}><circleGeometry args={[0.7, 32]} /><meshStandardMaterial color="#1A2E25" /></mesh>
@@ -119,15 +111,20 @@ export function AcademyScene() {
         <mesh position={[0, 0, 0.04]}><circleGeometry args={[0.05, 16]} /><meshStandardMaterial color="#333" /></mesh>
       </group>
 
-      {/* Motivational posters on side walls */}
-      {[-5, 0, 5].map((z, i) => (
-        <group key={`poster-l-${i}`} position={[-halfW + 0.12, 5, z]} rotation-y={Math.PI / 2}>
-          <mesh><planeGeometry args={[1.6, 1.1]} /><meshStandardMaterial color={['#E8F5F0', '#FFF3E0', '#F3E5F5'][i]} /></mesh>
-          <Text position={[0, 0, 0.02]} fontSize={0.12} color={hex.primary} anchorX="center" anchorY="middle" maxWidth={1.5} textAlign="center">
-            {['💡 Tri thức là sức mạnh', '🌱 Học hỏi mỗi ngày', '🎯 Kiên trì là chìa khóa'][i]}
-          </Text>
-        </group>
-      ))}
+      {/* Framed pictures flanking the windows on BOTH side walls — gold frames like the other buildings */}
+      {([
+        { side: 'L', x: -halfW + 0.1, ry: Math.PI / 2 },
+        { side: 'R', x: halfW - 0.1, ry: -Math.PI / 2 },
+      ] as const).map(wall =>
+        [-7.02, 0, 7.02].map((z, i) => (
+          <group key={`poster-${wall.side}-${i}`} position={[wall.x, 4.68, z]} rotation-y={wall.ry}>
+            {/* gold frame */}
+            <mesh><boxGeometry args={[2.0, 1.5, 0.16]} /><meshStandardMaterial color={hex.gold} metalness={0.7} roughness={0.3} /></mesh>
+            {/* picture */}
+            <mesh position={[0, 0, 0.1]}><planeGeometry args={[1.7, 1.2]} /><meshStandardMaterial color={['#E8F5F0', '#FFF3E0', '#F3E5F5'][i]} /></mesh>
+          </group>
+        ))
+      )}
 
       {/* Potted plants in corners */}
       {([[-halfW + 1.2, 0, -halfD + 1.2], [halfW - 1.2, 0, -halfD + 1.2], [-halfW + 1.2, 0, halfD - 1.2], [halfW - 1.2, 0, halfD - 1.2]] as [number, number, number][]).map((p, i) => (
@@ -201,23 +198,14 @@ export function AcademyScene() {
         <meshStandardMaterial color="#1A2E25" />
       </mesh>
 
-      <Text position={[0, 5.7, -halfD + 0.35]} fontSize={0.14} color="#9CC5A8" anchorX="center" anchorY="middle">
-        Đã thuộc: {knownCount} / {flashcardsData.length}
-      </Text>
-
       {/* Flashcard 3D — CENTERED on chalkboard */}
       <FlashCard3D
-        position={[0, 4.0, -halfD + 0.8]}
+        position={[0, 4.5, -halfD + 0.8]}
         flipped={flipped}
         onClick={() => setFlipped(f => !f)}
-        front={{ title: card?.front || '', sub: card?.category?.replace('_', ' ') || '' }}
+        front={{ title: card?.front || '', sub: '' }}
         back={{ title: card?.back?.slice(0, 220) || '', sub: '' }}
       />
-
-      {/* Index display */}
-      <Text position={[0, 6.6, -halfD + 0.35]} fontSize={0.16} color={hex.muted} anchorX="center" anchorY="middle">
-        Thẻ {index + 1} / {order.length}
-      </Text>
 
       {/* Controls — rounded buttons just in front of teacher's desk */}
       <group position={[0, 0, -4]}>
@@ -227,10 +215,6 @@ export function AcademyScene() {
         <RoundedButton position={[2.2, 1.6, 0]} width={1.4} height={0.7} color={hex.accent} onClick={() => { setOrder(shuffle(order)); setIndex(0); setFlipped(false); }} label="⇄ Xáo" />
         <RoundedButton position={[4, 1.6, 0]} width={1.4} height={0.7} color={hex.secondary} onClick={next} disabled={index >= order.length - 1} label="Sau →" />
       </group>
-
-      <Text position={[0, 0.4, -3]} fontSize={0.12} color={hex.muted} anchorX="center" anchorY="middle">
-        Click thẻ hoặc Space để lật · ← → chuyển · 1 / 2 đánh dấu
-      </Text>
     </group>
   );
 }
@@ -259,52 +243,46 @@ function FlashCard3D({
   front: { title: string; sub: string }; back: { title: string; sub: string };
 }) {
   const grpRef = useRef<THREE.Group>(null);
+  const frontRef = useRef<THREE.Group>(null);
+  const backRef = useRef<THREE.Group>(null);
+  const theta = useRef(0);
 
+  // "Flip" as a horizontal squash (scaleX) with a content swap at the midpoint.
+  // The card never rotates in 3D, so there is zero perspective foreshortening
+  // and therefore no "undulation" — it just narrows to an edge and re-opens.
   useFrame((_, delta) => {
-    if (!grpRef.current) return;
+    const g = grpRef.current;
+    if (!g) return;
     const target = flipped ? Math.PI : 0;
-    grpRef.current.rotation.y = THREE.MathUtils.damp(grpRef.current.rotation.y, target, 2.5, delta);
+    const step = Math.PI * 1.5 * delta; // ~half turn in ~0.67s
+    const diff = target - theta.current;
+    theta.current = Math.abs(diff) <= step ? target : theta.current + Math.sign(diff) * step;
+    const c = Math.cos(theta.current);
+    g.scale.x = Math.max(0.02, Math.abs(c));
+    const showFront = c >= 0;
+    if (frontRef.current) frontRef.current.visible = showFront;
+    if (backRef.current) backRef.current.visible = !showFront;
   });
 
-  // ONE solid slab. Face graphics live on thin single-sided panels offset
-  // just outside each face (+Z front, -Z back) so there is never a pair of
-  // coplanar surfaces fighting for the same depth — that z-fight was the
-  // "cloth ripple" artifact while flipping.
   return (
     <group ref={grpRef} position={position} onClick={(e) => { e.stopPropagation(); onClick(); }}>
-      {/* Solid card body */}
-      <RoundedBox args={[4, 2.6, 0.16]} radius={0.15} smoothness={4} castShadow>
+      {/* Card slab — always faces the camera */}
+      <mesh>
+        <boxGeometry args={[4, 2.6, 0.12]} />
         <meshStandardMaterial color="#EFE6D2" roughness={0.5} />
-      </RoundedBox>
+      </mesh>
 
-      {/* FRONT face (+Z) */}
-      <group>
-        <mesh position={[0, 0, 0.085]}>
-          <planeGeometry args={[3.86, 2.46]} />
-          <meshStandardMaterial color="#FAF4E8" roughness={0.4} />
-        </mesh>
-        <Text position={[0, 0.5, 0.1]} fontSize={0.34} color={hex.primary} anchorX="center" anchorY="middle" maxWidth={3.6} textAlign="center">
+      {/* FRONT — cream face + title */}
+      <group ref={frontRef}>
+        <Text position={[0, 0, 0.08]} fontSize={0.34} color="#000000" anchorX="center" anchorY="middle" maxWidth={3.6} textAlign="center">
           {front.title}
-        </Text>
-        <Text position={[0, -0.4, 0.1]} fontSize={0.13} color={hex.muted} anchorX="center" anchorY="middle">
-          {front.sub}
-        </Text>
-        <Text position={[0, -0.95, 0.1]} fontSize={0.1} color={hex.muted} anchorX="center" anchorY="middle">
-          (click để xem định nghĩa)
         </Text>
       </group>
 
-      {/* BACK face (-Z) — panel + text rotated to read correctly from behind */}
-      <group rotation-y={Math.PI}>
-        <mesh position={[0, 0, 0.085]}>
-          <planeGeometry args={[3.86, 2.46]} />
-          <meshStandardMaterial color={hex.primarySoft} roughness={0.4} />
-        </mesh>
-        <Text position={[0, 0.5, 0.1]} fontSize={0.16} color={hex.text} anchorX="center" anchorY="middle" maxWidth={3.6} textAlign="center" lineHeight={1.4}>
+      {/* BACK — same beige face + definition */}
+      <group ref={backRef}>
+        <Text position={[0, 0, 0.08]} fontSize={0.16} color="#000000" anchorX="center" anchorY="middle" maxWidth={3.6} textAlign="center" lineHeight={1.4}>
           {back.title}
-        </Text>
-        <Text position={[0, -0.6, 0.1]} fontSize={0.11} color={hex.muted} anchorX="center" anchorY="middle" maxWidth={3.4} textAlign="center" fontStyle="italic">
-          {back.sub}
         </Text>
       </group>
     </group>

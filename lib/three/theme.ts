@@ -114,8 +114,9 @@ export const cameraPresets: Record<string, CameraPreset> = {
   '/game':          { position: [34, 5.4, -24.5], lookAt: [34, 4.9, -34],   fov: 55 },
   // Quiz keeps the SAME arena framing as /game — the board game shows as a DOM
   // popup over the live arena background instead of swapping to a flat 2D page.
-  '/game/quiz':     { position: [34, 5.4, -24.5], lookAt: [34, 4.9, -34],   fov: 55 },
-  '/game/debate':   { position: [34, 5, -20],   lookAt: [34, 4, -38],      fov: 70 },
+  '/game/quiz':     { position: [34, 5.4, -24.5], lookAt: [34, 4.9, -34],   fov: 55 },  // Describe ("Luận Giải") also plays over the live arena background — keep the
+  // exact arena framing so the camera never flies back to the city overview.
+  '/game/describe': { position: [34, 5.4, -24.5], lookAt: [34, 4.9, -34], fov: 55 },  '/game/debate':   { position: [34, 5, -20],   lookAt: [34, 4, -38],      fov: 70 },
   // TownHall: 32w × 26d × 11h at (34,0,34). Auth/login panel at world (34,3.5,29).
   // Land close, framed straight on the login panel.
   '/townhall':      { position: [34, 4, 38],    lookAt: [34, 3.6, 29],     fov: 52 },

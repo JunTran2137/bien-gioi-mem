@@ -26,31 +26,32 @@ export function Academy() {
         <meshStandardMaterial color="#FFE0CC" roughness={0.55} />
       </RoundedBox>
 
-      {/* Clock tower */}
-      <RoundedBox args={[2.8, 8, 2.8]} radius={0.3} smoothness={2} position={[-3, 7, 2]} castShadow receiveShadow>
+      {/* Clock tower — raised taller so the whole roofline sits higher. */}
+      <RoundedBox args={[2.8, 6, 2.8]} radius={0.3} smoothness={2} position={[-3, 7, 2]} castShadow receiveShadow>
         <meshStandardMaterial color={hex.pastelPeach} roughness={0.55} />
       </RoundedBox>
       {/* Clock face */}
-      <mesh position={[-3, 9.5, 3.41]}>
+      <mesh position={[-3, 8, 3.41]}>
         <circleGeometry args={[0.9, 24]} />
         <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={0.2} />
       </mesh>
-      <mesh position={[-3, 9.5, 3.42]}>
+      <mesh position={[-3, 8, 3.42]}>
         <ringGeometry args={[0.85, 0.95, 24]} />
         <meshStandardMaterial color={hex.text} />
       </mesh>
       {/* clock hands */}
-      <mesh position={[-3, 9.5, 3.43]} rotation-z={Math.PI / 4}>
+      <mesh position={[-3, 8, 3.43]} rotation-z={Math.PI / 4}>
         <planeGeometry args={[0.05, 0.6]} />
         <meshStandardMaterial color={hex.text} />
       </mesh>
-      <mesh position={[-3, 9.5, 3.43]} rotation-z={-Math.PI / 6}>
+      <mesh position={[-3, 8, 3.43]} rotation-z={-Math.PI / 6}>
         <planeGeometry args={[0.04, 0.45]} />
         <meshStandardMaterial color={hex.text} />
       </mesh>
-      {/* Tower roof — cone */}
-      <mesh castShadow position={[-3, 11.6, 2]}>
-        <coneGeometry args={[1.8, 1.6, 6]} />
+      {/* Tower roof — pointed cone lifted UP to sit as a cap on top of the taller
+          tower (raised, not stretched). */}
+      <mesh castShadow position={[-3, 11, 2]}>
+        <coneGeometry args={[1.8, 2, 6]} />
         <meshStandardMaterial color={hex.danger} roughness={0.55} />
       </mesh>
 
@@ -62,21 +63,23 @@ export function Academy() {
         <meshStandardMaterial color={hex.danger} roughness={0.55} />
       </RoundedBox>
 
-      {/* Round windows on main wing */}
+      {/* Round windows on main wing — centred on the wing (x=-3) instead of
+          being offset left. */}
       {Array.from({ length: 3 }).map((_, i) => (
-        <mesh key={`rw-${i}`} position={[-5 + i * 1.5, 4.2, 3.51]}>
+        <mesh key={`rw-${i}`} position={[-4.5 + i * 1.5, 4.2, 3.51]}>
           <circleGeometry args={[0.55, 24]} />
           <meshStandardMaterial color="#A8D8F0" emissive="#A8D8F0" emissiveIntensity={0.3} roughness={0.3} />
         </mesh>
       ))}
       {Array.from({ length: 3 }).map((_, i) => (
-        <mesh key={`rw-l-${i}`} position={[-5 + i * 1.5, 4.2, 3.52]}>
+        <mesh key={`rw-l-${i}`} position={[-4.5 + i * 1.5, 4.2, 3.52]}>
           <ringGeometry args={[0.5, 0.6, 24]} />
           <meshStandardMaterial color="#fff" />
         </mesh>
       ))}
 
-      {/* Square windows on right wing */}
+      {/* Square windows on right wing — centred on the wing (x=3.5) and pushed
+          off the facade so they don't z-fight (were offset left + flush). */}
       {Array.from({ length: 2 }).map((_, row) => (
         Array.from({ length: 2 }).map((__, col) => (
           <RoundedBox
@@ -84,23 +87,24 @@ export function Academy() {
             args={[0.9, 0.9, 0.05]}
             radius={0.1}
             smoothness={3}
-            position={[2 + col * 1.5, 2 + row * 1.5, 3.01]}
+            position={[2.75 + col * 1.5, 2 + row * 1.5, 3.06]}
           >
             <meshStandardMaterial color="#A8D8F0" emissive="#A8D8F0" emissiveIntensity={0.3} roughness={0.3} />
           </RoundedBox>
         ))
       ))}
 
-      {/* Door */}
-      <RoundedBox args={[1.6, 2.4, 0.15]} radius={0.2} smoothness={2} position={[-3, 1.8, 3.55]}>
+      {/* Door — raised so its base sits above the plinth top (y=0.6) instead of
+          being coplanar with it, and nudged off the facade to stop flicker. */}
+      <RoundedBox args={[1.6, 2.4, 0.15]} radius={0.2} smoothness={2} position={[-3, 1.9, 3.6]}>
         <meshStandardMaterial color="#5C3D2A" roughness={0.6} />
       </RoundedBox>
 
       {/* Sign */}
-      <RoundedBox args={[4, 0.8, 0.15]} radius={0.15} smoothness={2} position={[3.5, 4, 3.05]}>
+      <RoundedBox args={[4, 0.8, 0.15]} radius={0.15} smoothness={2} position={[3.5, 4.6, 3.05]}>
         <meshStandardMaterial color={hex.accent} emissive={hex.accent} emissiveIntensity={0.4} roughness={0.4} />
       </RoundedBox>
-      <Text position={[3.5, 4, 3.16]} fontSize={0.32} color="#fff" anchorX="center" anchorY="middle" bold>
+      <Text position={[3.5, 4.6, 3.16]} fontSize={0.32} color="#fff" anchorX="center" anchorY="middle" bold>
         🎓 HỌC VIỆN
       </Text>
     </Hotspot>
