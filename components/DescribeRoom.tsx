@@ -16,6 +16,26 @@ import { cn } from '@/lib/utils';
 
 const GROUP_COLORS = ['#E05C5C', '#4A90D9', '#F4A261', '#2E8B6B', '#9C5BC0', '#F4C542', '#E86AA6', '#3AB0A2'];
 
+// Off-main-thread camera-grid renderer. The host receives every group's live
+// thumbnail at ~30fps; decoding all of them on the main thread (N×30 JPEG
+// decodes/sec) is what tanked the host's FPS. Instead we transfer each group's
+// <canvas> into this single worker (transferControlToOffscreen) and let it own
+// the OffscreenCanvas: it decodes the JPEG (createImageBitmap) and paints it,
+// entirely off the main thread. The main thread only forwards the raw bytes, so
+// React keeps 60fps and every group stays a full 30fps regardless of how many
+// cameras are live. A per-group "busy" guard applies natural backpressure —
+// it only skips a frame if that group's previous decode hasn't finished yet.
+const DECODE_WORKER_SRC = `
+let cv={},cx={},busy={};
+onmessage=function(e){var d=e.data;
+ if(d.type==='register'){cv[d.groupId]=d.canvas;var c=null;try{c=d.canvas.getContext('bitmaprenderer');}catch(_){}cx[d.groupId]=c?{k:1,c:c}:{k:0,c:d.canvas.getContext('2d')};busy[d.groupId]=false;}
+ else if(d.type==='unregister'){delete cv[d.groupId];delete cx[d.groupId];delete busy[d.groupId];}
+ else if(d.type==='frame'){var ctx=cx[d.groupId],canvas=cv[d.groupId];if(!ctx||!canvas||busy[d.groupId])return;busy[d.groupId]=true;
+   createImageBitmap(new Blob([d.buf],{type:'image/jpeg'}),{premultiplyAlpha:'none',colorSpaceConversion:'none'}).then(function(bmp){busy[d.groupId]=false;
+     if(ctx.k===1){ctx.c.transferFromImageBitmap(bmp);}else{if(canvas.width!==bmp.width||canvas.height!==bmp.height){canvas.width=bmp.width;canvas.height=bmp.height;}ctx.c.drawImage(bmp,0,0);bmp.close();}
+   }).catch(function(){busy[d.groupId]=false;});}
+};`;
+
 function colorForGroup(groupId: string, groups: { groupId: string }[]) {
   const i = Math.max(0, groups.findIndex(g => g.groupId === groupId));
   return GROUP_COLORS[i % GROUP_COLORS.length];
@@ -369,14 +389,53 @@ function CameraGrid({ g, groups }: { g: any; groups: any[] }) {
   const r = g.reveal;
   const ids: string[] = r?.guesserGroupIds || [];
   const guesses = r?.subPhase === 'showing' ? g.liveGuesses : (r?.guesses || {});
-  // Decode JPEG off main thread via createImageBitmap, draw to <canvas>
+
+  // ── Off-main-thread rendering ─────────────────────────────────────────────
+  // Each group's <canvas> is transferred into ONE shared worker that decodes and
+  // paints every feed off the main thread. See DECODE_WORKER_SRC above. The main
+  // thread only forwards JPEG bytes (zero-copy transfer), so all groups keep a
+  // full 30fps and the host UI stays smooth no matter how many cameras are live.
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
-  // Cache bitmaprenderer contexts (zero-copy transferFromImageBitmap)
-  // Use explicit false sentinel to distinguish "queried+unsupported" from "not yet queried"
-  const bmpCtxRefs = useRef<Record<string, ImageBitmapRenderingContext | false | null>>({});
-  // Per-group decode guard: skip incoming frame if previous createImageBitmap still pending
+  const workerRef = useRef<Worker | null>(null);
+  const transferredRef = useRef<WeakSet<HTMLCanvasElement>>(new WeakSet());
+  // Fallback path (browsers without OffscreenCanvas transfer): decode on main thread.
   const decodingRef = useRef<Record<string, boolean>>({});
-  // Delivered-FPS meter: counts frames drawn per group, sampled once a second.
+  const bmpCtxRefs = useRef<Record<string, ImageBitmapRenderingContext | false | null>>({});
+
+  const OFFSCREEN_OK = typeof window !== 'undefined'
+    && typeof (window as any).OffscreenCanvas !== 'undefined'
+    && typeof HTMLCanvasElement !== 'undefined'
+    && 'transferControlToOffscreen' in HTMLCanvasElement.prototype
+    && typeof createImageBitmap !== 'undefined';
+
+  const getWorker = useCallback((): Worker | null => {
+    if (!OFFSCREEN_OK) return null;
+    if (workerRef.current) return workerRef.current;
+    try {
+      const blob = new Blob([DECODE_WORKER_SRC], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      const w = new Worker(url);
+      URL.revokeObjectURL(url);
+      workerRef.current = w;
+      return w;
+    } catch { return null; }
+  }, [OFFSCREEN_OK]);
+
+  // Hand each freshly-mounted <canvas> to the worker exactly once (a canvas can
+  // only be transferred a single time). The WeakSet guards against double-transfer.
+  const registerCanvas = useCallback((gid: string, el: HTMLCanvasElement | null) => {
+    canvasRefs.current[gid] = el;
+    if (!el || transferredRef.current.has(el)) return;
+    const w = getWorker();
+    if (!w) return; // no worker → main-thread fallback path draws on this canvas
+    transferredRef.current.add(el);
+    try {
+      const off = (el as any).transferControlToOffscreen();
+      w.postMessage({ type: 'register', groupId: gid, canvas: off }, [off]);
+    } catch { /* transfer failed — fallback path will draw on the DOM canvas */ }
+  }, [getWorker]);
+
+  // Delivered-FPS meter: counts frames received per group, sampled once a second.
   const fpsCountRef = useRef<Record<string, number>>({});
   const [fps, setFps] = useState<Record<string, number>>({});
   useEffect(() => {
@@ -386,12 +445,22 @@ function CameraGrid({ g, groups }: { g: any; groups: any[] }) {
     }, 1000);
     return () => clearInterval(id);
   }, []);
+  // Terminate the worker when the grid unmounts.
+  useEffect(() => () => {
+    if (workerRef.current) { try { workerRef.current.terminate(); } catch { /* noop */ } workerRef.current = null; }
+  }, []);
   useEffect(() => {
     const socket = getSocket();
     const onFrame = (d: { groupId: string; jpeg: ArrayBuffer | string }) => {
       if (!(d.jpeg instanceof ArrayBuffer)) return;
       fpsCountRef.current[d.groupId] = (fpsCountRef.current[d.groupId] || 0) + 1;
-      // Drop frame if still decoding previous one for this group (prevent queue buildup)
+      const w = getWorker();
+      if (w) {
+        // Zero-copy: transfer the JPEG bytes to the worker (we never reuse them).
+        w.postMessage({ type: 'frame', groupId: d.groupId, buf: d.jpeg }, [d.jpeg]);
+        return;
+      }
+      // ── Fallback (no OffscreenCanvas transfer): decode on the main thread ──
       if (decodingRef.current[d.groupId]) return;
       const canvas = canvasRefs.current[d.groupId];
       if (!canvas) return;
@@ -442,7 +511,7 @@ function CameraGrid({ g, groups }: { g: any; groups: any[] }) {
     };
     socket.on('dg:cameraFrame', onFrame);
     return () => { socket.off('dg:cameraFrame', onFrame); };
-  }, []);
+  }, [getWorker]);
   return (
     <div>
       <p className="text-sm font-semibold text-white mb-2 flex items-center gap-1"><Camera size={15} /> Các nhóm giơ thẻ đoán</p>
@@ -457,7 +526,7 @@ function CameraGrid({ g, groups }: { g: any; groups: any[] }) {
               correct === true ? 'border-primary border-2' : correct === false ? 'border-danger border-2' : 'border-border'
             )}>
               <canvas
-                ref={el => { canvasRefs.current[gid] = el; }}
+                ref={el => { registerCanvas(gid, el); }}
                 className={cn('w-full h-full object-cover', cam?.connected ? '' : 'hidden')}
               />
               {!cam?.connected && (

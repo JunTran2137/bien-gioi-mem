@@ -19,7 +19,10 @@ import { getSocket } from '@/lib/socket-client';
 
 const STREAM_WIDTH = 360;    // thumbnail width for the host grid
 const FRAME_QUALITY = 0.6;   // thumbnail JPEG quality
-const STREAM_FPS = 30;       // smooth live feed on the host grid
+const STREAM_FPS = 30;       // smooth live feed on the host grid. The host decodes every
+                             // group's frames OFF the main thread (OffscreenCanvas worker),
+                             // so this stays a full 30fps for every group no matter how many
+                             // cameras are live.
 const OCR_FRAME_WIDTH = 960; // sharp frame sent to the server for OCR (card text must be legible)
 const OCR_FRAME_QUALITY = 0.82;
 const OCR_FRAME_FPS = 1.2;   // low rate — the card doesn't change fast; keeps bandwidth + server load low
